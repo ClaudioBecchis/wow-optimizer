@@ -91,11 +91,11 @@ function parseSimcBags(simcText) {
     }
   });
 
-  // Calculate minimum ilvl: lowest equipped - 15 (tight filter)
+  // Calculate minimum ilvl: at least 500 (Midnight minimum), and no lower than lowest equipped - 10
   var ilvlValues = Object.values(equippedIlvls);
   var avgIlvl = ilvlValues.length > 0 ? ilvlValues.reduce(function(a,b){return a+b},0) / ilvlValues.length : 0;
   var lowestEquipped = ilvlValues.length > 0 ? Math.min.apply(null, ilvlValues) : 0;
-  var minIlvl = Math.max(lowestEquipped - 15, Math.floor(avgIlvl * 0.90));
+  var minIlvl = Math.max(500, lowestEquipped - 10, Math.floor(avgIlvl * 0.92));
 
   // Filter bag items
   var filteredBags = bagItems.filter(function(item) {
