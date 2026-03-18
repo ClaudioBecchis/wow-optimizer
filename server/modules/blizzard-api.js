@@ -193,6 +193,28 @@ async function apiGet(endpoint, region, namespace) {
   }
 }
 
+// --------------- Item icon ---------------
+
+/**
+ * Fetch the icon URL for a given item ID from the Blizzard media endpoint.
+ * @param {number} itemId - The WoW item ID
+ * @returns {Promise<string|null>} The icon asset URL, or null on failure
+ */
+async function getItemIcon(itemId) {
+  try {
+    const region = (db.getConfig('blizzard_region') || 'eu').toLowerCase();
+    const data = await apiGet(
+      `/data/wow/media/item/${itemId}`,
+      region,
+      `static-${region}`
+    );
+    return (data && data.assets && data.assets[0] && data.assets[0].value) || null;
+  } catch (err) {
+    console.error('[blizzard-api] getItemIcon error for item ' + itemId + ':', err.message);
+    return null;
+  }
+}
+
 // --------------- Character import ---------------
 
 /**
@@ -317,6 +339,28 @@ async function importCharacter(realm, name, region) {
       }
     } catch (eqErr) {
       console.error('[blizzard-api] Error building equipment map:', eqErr);
+    }
+
+    // --- Fetch item icons in parallel ---
+    try {
+      var iconResults = await Promise.all(
+        Object.keys(equipment).map(function (slot) {
+          var item = equipment[slot];
+          if (item && item.id) {
+            return getItemIcon(item.id).then(function (url) {
+              return { slot: slot, url: url };
+            });
+          }
+          return Promise.resolve({ slot: slot, url: null });
+        })
+      );
+      iconResults.forEach(function (entry) {
+        if (entry.url && equipment[entry.slot]) {
+          equipment[entry.slot].iconUrl = entry.url;
+        }
+      });
+    } catch (iconErr) {
+      console.error('[blizzard-api] Error fetching item icons:', iconErr);
     }
 
     // --- Build stats ---

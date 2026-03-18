@@ -949,7 +949,7 @@ function renderDashboard() {
         var itemIlvl = item ? (item.ilvl || item.itemLevel || item.item_level || '?') : '-';
         var quality = item ? (item.quality || 'common') : 'poor';
         var qColor = getQualityColor(quality);
-        var icon = (item && item.icon) ? item.icon : PLACEHOLDER_ICON;
+        var icon = (item && item.iconUrl) ? item.iconUrl : ((item && item.icon) ? item.icon : PLACEHOLDER_ICON);
         var enchant = item ? (item.enchant || item.enchantment || '') : '';
         var gem = item ? (item.gem || '') : '';
 
