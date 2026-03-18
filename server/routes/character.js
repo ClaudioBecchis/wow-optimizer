@@ -271,6 +271,7 @@ router.post('/import-armory', async (req, res) => {
       race: imported.race,
       level: imported.level,
       ilvl: imported.ilvl,
+      talents: imported.talents,
       equipment: imported.equipment,
       stats: imported.stats,
       avatarUrl: imported.avatarUrl,
