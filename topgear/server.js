@@ -410,6 +410,168 @@ app.get('/api/status/:id', function(req, res) {
 
 app.use('/reports', express.static(REPORTS));
 
+// ═══ SIMC-WEB COMPATIBLE API (SSE live output) ═══
+
+// POST /api/jobs - Create a new sim job (simc-web compatible)
+app.post('/api/jobs', async function(req, res) {
+  try {
+    var profile = req.body.profile;
+    if (!profile) return res.status(400).json({ error: 'Missing profile' });
+
+    var jobId = ++jobCounter;
+    var inputFile = path.join(TMP, 'job_' + jobId + '.simc');
+    var jsonFile = path.join(TMP, 'job_' + jobId + '.json');
+    var htmlFile = path.join(REPORTS, 'sim_' + jobId + '_' + Date.now() + '.html');
+
+    // Write profile with defaults
+    var input = profile.trim() + '\n';
+    input += 'threads=12\n';
+    input += 'iterations=25000\n';
+    input += 'target_error=0.2\n';
+    input += 'use_item_verification=0\n';
+    input += 'calculate_scale_factors=1\n';
+    input += 'scale_only=strength,agility,intellect,crit_rating,haste_rating,mastery_rating,versatility_rating,weapon_dps,weapon_offhand_dps\n';
+
+    fs.writeFileSync(inputFile, input);
+
+    jobs[jobId] = {
+      status: 'queued',
+      progress: 0,
+      output: '',
+      dps: null,
+      results: null,
+      htmlReport: null,
+      error: null,
+      startTime: Date.now()
+    };
+
+    // Run SimC
+    var proc = spawn(SIMC, [inputFile, 'json2=' + jsonFile, 'html=' + htmlFile], { cwd: TMP });
+
+    jobs[jobId].status = 'running';
+
+    proc.stdout.on('data', function(data) {
+      var text = data.toString();
+      jobs[jobId].output += text;
+      var match = text.match(/(\d+)%/);
+      if (match) jobs[jobId].progress = parseInt(match[1]);
+    });
+
+    proc.stderr.on('data', function(data) {
+      jobs[jobId].output += data.toString();
+    });
+
+    proc.on('close', function(code) {
+      var duration = (Date.now() - jobs[jobId].startTime) / 1000;
+
+      if (code !== 0) {
+        jobs[jobId].status = 'failed';
+        jobs[jobId].error = 'SimC exit code ' + code;
+        return;
+      }
+
+      try {
+        if (fs.existsSync(jsonFile)) {
+          var raw = fs.readFileSync(jsonFile, 'utf-8');
+          var data = JSON.parse(raw);
+          var player = data.sim.players[0];
+          jobs[jobId].dps = Math.round(player.collected_data.dps.mean);
+          if (player.scale_factors) jobs[jobId].scaleFactors = player.scale_factors;
+          // Don't store full JSON - too big
+        }
+      } catch(e) {
+        console.log('[simc-web] Parse error:', e.message);
+      }
+
+      jobs[jobId].status = 'done';
+      jobs[jobId].progress = 100;
+      jobs[jobId].duration = duration;
+      if (fs.existsSync(htmlFile)) jobs[jobId].htmlReport = '/reports/' + path.basename(htmlFile);
+
+      // Cleanup
+      try { fs.unlinkSync(inputFile); } catch(e) {}
+      try { fs.unlinkSync(jsonFile); } catch(e) {}
+    });
+
+    proc.on('error', function(err) {
+      jobs[jobId].status = 'failed';
+      jobs[jobId].error = err.message;
+    });
+
+    res.json({ job_id: jobId });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/jobs/:id/stream - SSE live output
+app.get('/api/jobs/:id/stream', function(req, res) {
+  var id = req.params.id;
+  var job = jobs[id];
+  if (!job) return res.status(404).json({ error: 'Not found' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  var lastOutputLen = 0;
+  var interval = setInterval(function() {
+    var j = jobs[id];
+    if (!j) { clearInterval(interval); res.end(); return; }
+
+    // Send new output
+    if (j.output && j.output.length > lastOutputLen) {
+      var newText = j.output.substring(lastOutputLen);
+      lastOutputLen = j.output.length;
+      res.write('data: ' + JSON.stringify({ type: 'output', text: newText, progress: j.progress }) + '\n\n');
+    }
+
+    // Send completion
+    if (j.status === 'done' || j.status === 'failed') {
+      var result = {
+        type: 'complete',
+        status: j.status,
+        dps: j.dps,
+        scaleFactors: j.scaleFactors || null,
+        duration: j.duration,
+        htmlReport: j.htmlReport,
+        error: j.error
+      };
+
+      // Generate Pawn string
+      if (j.scaleFactors) {
+        var pawnMap = {Str:'Strength',Agi:'Agility',Int:'Intellect',Crit:'CritRating',Haste:'HasteRating',Mastery:'MasteryRating',Vers:'Versatility',Wdps:'Dps',WOHdps:'OffHandDps'};
+        var parts = [];
+        Object.keys(j.scaleFactors).forEach(function(k) {
+          if (pawnMap[k] && j.scaleFactors[k] !== 0) parts.push(' ' + pawnMap[k] + '=' + j.scaleFactors[k].toFixed(2));
+        });
+        result.pawnString = '( Pawn: v1: "SimC":' + parts.join(',') + ' )';
+      }
+
+      res.write('data: ' + JSON.stringify(result) + '\n\n');
+      clearInterval(interval);
+      res.end();
+    }
+  }, 500);
+
+  req.on('close', function() { clearInterval(interval); });
+});
+
+// GET /api/jobs/:id - Job status (polling alternative)
+app.get('/api/jobs/:id', function(req, res) {
+  var job = jobs[req.params.id];
+  if (!job) return res.status(404).json({ error: 'Not found' });
+  res.json({
+    status: job.status,
+    progress: job.progress,
+    dps: job.dps,
+    duration: job.duration,
+    htmlReport: job.htmlReport,
+    error: job.error
+  });
+});
+
 app.listen(80, '0.0.0.0', function() {
-  console.log('Top Gear server on port 80');
+  console.log('WoW Optimizer server on port 80');
 });
