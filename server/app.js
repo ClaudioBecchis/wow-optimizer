@@ -43,7 +43,15 @@ try {
 
 try {
   const clientDir = path.join(__dirname, '..', 'client');
-  app.use(express.static(clientDir));
+  app.use(express.static(clientDir, {
+    etag: false,
+    maxAge: 0,
+    setHeaders: function(res) {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+    }
+  }));
 } catch (err) {
   console.error('[app] Failed to set up static file serving:', err);
 }
