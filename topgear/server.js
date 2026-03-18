@@ -73,7 +73,7 @@ function parseSimcBags(simcText) {
   };
 }
 
-function parseResults(jobId, jsonFile, htmlFile, inputFile, duration) {
+function parseResults(jobId, jsonFile, htmlFile, inputFile, duration, itemMap) {
   try {
     var raw = fs.readFileSync(jsonFile, 'utf-8');
     var data = JSON.parse(raw);
@@ -81,17 +81,21 @@ function parseResults(jobId, jsonFile, htmlFile, inputFile, duration) {
     var baselineDps = baseline.collected_data.dps.mean;
 
     var results = [];
-    results.push({ name: 'Equipaggiato (Attuale)', dps: Math.round(baselineDps), delta: 0, pct: '0.00', isBest: false });
+    results.push({ name: 'Equipaggiato (Attuale)', dps: Math.round(baselineDps), delta: 0, pct: '0.00', isBest: false, slot: '', itemId: '0', ilvl: '' });
 
     if (data.sim.profilesets && data.sim.profilesets.results) {
       data.sim.profilesets.results.forEach(function(ps) {
         var delta = Math.round(ps.mean - baselineDps);
+        var info = (itemMap && itemMap[ps.name]) || {};
         results.push({
           name: ps.name,
           dps: Math.round(ps.mean),
           delta: delta,
           pct: ((ps.mean - baselineDps) / baselineDps * 100).toFixed(2),
-          isBest: false
+          isBest: false,
+          slot: info.slot || '',
+          itemId: info.itemId || '0',
+          ilvl: info.ilvl || ''
         });
       });
     }
@@ -159,10 +163,14 @@ app.post('/api/simulate', function(req, res) {
     input += 'strict_parsing=0\n';
     input += '\n';
 
+    // Build item map for results enrichment
+    var itemMap = {};
+
     // Add each bag item as a profileset
     bagItems.forEach(function(item, i) {
       var name = item.name || ('Bag_' + (i + 1));
       name = name.replace(/"/g, '').substring(0, 50);
+      itemMap[name] = { slot: item.slot, itemId: item.itemId, ilvl: item.ilvl, name: item.name };
       input += 'profileset."' + name + '"+=' + item.gear + '\n';
     });
 
@@ -226,7 +234,7 @@ app.post('/api/simulate', function(req, res) {
           jobs[jobId].skippedItems = removedItems;
         }
         
-        parseResults(jobId, jsonFile, htmlFile, inputFile, duration);
+        parseResults(jobId, jsonFile, htmlFile, inputFile, duration, itemMap);
       });
 
       proc.on('error', function(err) {
