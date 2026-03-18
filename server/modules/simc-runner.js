@@ -331,7 +331,6 @@ function parseAndStoreResults(job) {
         status: 'done',
         progress: 100,
         dps: dps,
-        result_json: resultData,
         stat_weights_json: statWeights,
         duration_seconds: duration,
         html_report: '/reports/sim_' + job.simId + '.html'
