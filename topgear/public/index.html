@@ -45,6 +45,9 @@ textarea:focus{border-color:var(--gold-dark);outline:none}
 .report-link a{color:var(--gold);text-decoration:none;font-weight:600}
 .report-link a:hover{text-decoration:underline}
 .hidden{display:none}
+.iconsmall{vertical-align:middle;margin-right:4px}
+.result-item a[data-wowhead]{transition:color .15s}
+.result-item a[data-wowhead]:hover{text-shadow:0 0 6px rgba(163,53,238,0.4)}
 .bag-count{font-size:13px;color:var(--gold-dim);margin-top:8px}
 .status-error{font-size:12px;color:#e88;margin-top:8px}
 ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--gold-dark);border-radius:4px}
@@ -59,7 +62,8 @@ textarea:focus{border-color:var(--gold-dark);outline:none}
     <div class="card-title">Incolla qui il tuo /simc</div>
     <div class="info-box">
       In WoW scrivi <strong>/simc</strong> in chat. L'addon esporta il tuo personaggio CON gli oggetti della borsa.
-      Copia tutto e incolla qui sotto. L'app trova automaticamente gli oggetti alternativi e li confronta.
+      Copia tutto e incolla qui sotto. L'app trova automaticamente gli oggetti alternativi e li simula tutti.
+      Per ogni pezzo ti dice: <strong style="color:var(--green)">INDOSSA</strong>, <strong style="color:var(--gold)">TIENI</strong> o <strong style="color:var(--red)">BUTTA</strong>.
     </div>
     <textarea id="profileInput" rows="12" placeholder="Incolla qui TUTTA la stringa /simc..."></textarea>
     <div id="bagCount" class="bag-count hidden"></div>
@@ -145,6 +149,8 @@ function showResults(job) {
   var html = '';
   var bestDps = job.results[0].dps;
 
+  var slotIT = {head:'Testa',neck:'Collo',shoulder:'Spalle',back:'Schiena',chest:'Petto',wrist:'Polsi',hands:'Mani',waist:'Vita',legs:'Gambe',feet:'Piedi',finger1:'Anello 1',finger2:'Anello 2',trinket1:'Trinket 1',trinket2:'Trinket 2',main_hand:'Arma',off_hand:'Seconda mano'};
+
   job.results.forEach(function(r, i) {
     var cls = i === 0 ? 'best' : (r.delta < 0 ? 'worse' : '');
     var deltaText, deltaClass, verdict, verdictClass;
@@ -166,22 +172,20 @@ function showResults(job) {
       verdictClass = 'verdict-discard';
     }
 
-    var iconUrl = r.itemId && r.itemId !== '0' 
-      ? 'https://wow.zamimg.com/images/wow/icons/medium/inv_misc_questionmark.jpg'
-      : '';
-    var iconHtml = iconUrl 
-      ? '<img src="' + iconUrl + '" style="width:32px;height:32px;border-radius:4px;border:1px solid var(--gold-dark)" onerror="this.style.display=\'none\'">'
-      : '<div style="width:32px;height:32px;background:var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--gold-dark)">&#9733;</div>';
-    var slotLabel = r.slot ? '<span style="font-size:10px;color:var(--text-dim);text-transform:uppercase">' + esc(r.slot) + '</span> ' : '';
-    var ilvlLabel = r.ilvl ? ' <span style="font-size:11px;color:var(--gold-dim)">' + esc(r.ilvl) + ' ilvl</span>' : '';
-    var wowheadLink = r.itemId && r.itemId !== '0' 
-      ? '<a href="https://www.wowhead.com/item=' + r.itemId + '" target="_blank" style="color:inherit;text-decoration:none">' + esc(r.name) + '</a>'
-      : esc(r.name);
+    var slotName = r.slot ? (slotIT[r.slot] || r.slot) : '';
+    var itemLink = r.itemId && r.itemId !== '0'
+      ? '<a href="https://it.wowhead.com/item=' + r.itemId + '" target="_blank" data-wowhead="item=' + r.itemId + '&domain=it" style="color:var(--epic);text-decoration:none;font-weight:700">' + esc(r.name) + '</a>'
+      : '<span style="font-weight:700">' + esc(r.name) + '</span>';
 
     html += '<div class="result-item ' + cls + '">'
       + '<div class="result-rank">#' + (i + 1) + '</div>'
-      + iconHtml
-      + '<div class="result-name">' + slotLabel + wowheadLink + ilvlLabel + '</div>'
+      + '<div style="min-width:0;flex:1">'
+      +   '<div style="display:flex;align-items:center;gap:8px">'
+      +     (slotName ? '<span style="font-size:10px;color:var(--gold-dark);text-transform:uppercase;letter-spacing:0.5px;min-width:65px">' + esc(slotName) + '</span>' : '')
+      +     itemLink
+      +     (r.ilvl ? '<span style="font-size:11px;color:var(--gold-dim);margin-left:6px">' + esc(r.ilvl) + ' ilvl</span>' : '')
+      +   '</div>'
+      + '</div>'
       + '<span class="result-verdict ' + verdictClass + '">' + verdict + '</span>'
       + '<div class="result-dps">' + r.dps.toLocaleString() + '</div>'
       + '<div class="result-delta ' + deltaClass + '">' + deltaText + '</div>'
@@ -217,7 +221,7 @@ function showError(msg) {
 function hideError() { document.getElementById('errorMsg').classList.add('hidden'); }
 function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 </script>
-<script>var whTooltips = {colorLinks: true, iconizeLinks: true, renameLinks: false};</script>
-<script src="https://wow.zamimg.com/widgets/power.js"></script>
+<script>var defined,defined;var whTooltips = {colorLinks: true, iconizeLinks: true, renameLinks: true, iconSize: 'small'};</script>
+<script src="https://wow.zamimg.com/js/tooltips.js"></script>
 </body>
 </html>
