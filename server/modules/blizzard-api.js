@@ -404,28 +404,31 @@ async function importCharacter(realm, name, region) {
     }
 
     // --- Talent loadout code ---
+    // Blizzard API structure: specializations[].loadouts[].talent_loadout_code
+    // The active loadout has is_active=true
     let talents = '';
     try {
       if (specsData && Array.isArray(specsData.specializations)) {
-        // Find the active specialization matching the profile's active_spec,
-        // or fall back to the first specialization with a loadout_code
         const activeSpecName = profile.active_spec?.name || '';
         let activeSpec = null;
 
+        // Find matching spec
         if (activeSpecName) {
           activeSpec = specsData.specializations.find(
             (s) => s.specialization?.name === activeSpecName
           );
         }
-
-        if (!activeSpec) {
-          // Fall back: pick the first spec that has a loadout_code
-          activeSpec = specsData.specializations.find((s) => s.loadout_code);
+        if (!activeSpec && specsData.specializations.length > 0) {
+          activeSpec = specsData.specializations[0];
         }
 
-        if (activeSpec && activeSpec.loadout_code) {
-          talents = activeSpec.loadout_code;
-          console.log('[blizzard-api] Extracted talent loadout_code for', activeSpecName || 'active spec');
+        if (activeSpec && Array.isArray(activeSpec.loadouts)) {
+          // Find active loadout
+          const activeLoadout = activeSpec.loadouts.find((l) => l.is_active) || activeSpec.loadouts[0];
+          if (activeLoadout && activeLoadout.talent_loadout_code) {
+            talents = activeLoadout.talent_loadout_code;
+            console.log('[blizzard-api] Extracted talent_loadout_code for', activeSpecName, ':', talents.substring(0, 30) + '...');
+          }
         }
       }
     } catch (talentErr) {
