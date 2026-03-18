@@ -72,9 +72,41 @@ function parseSimcBags(simcText) {
     }
   }
 
+  // Extract equipped item ilvls to calculate minimum threshold
+  var equippedIlvls = {};
+  profileLines.forEach(function(line) {
+    var l = line.trim();
+    var slotMatch = l.match(/^(head|neck|shoulder|back|chest|wrist|hands|waist|legs|feet|finger1|finger2|trinket1|trinket2|main_hand|off_hand)=/);
+    if (slotMatch) {
+      var ilvlMatch = l.match(/,ilevel=(\d+)/);
+      if (ilvlMatch) equippedIlvls[slotMatch[1]] = parseInt(ilvlMatch[1]);
+    }
+  });
+
+  // Calculate average equipped ilvl
+  var ilvlValues = Object.values(equippedIlvls);
+  var avgIlvl = ilvlValues.length > 0 ? ilvlValues.reduce(function(a,b){return a+b},0) / ilvlValues.length : 0;
+  var minIlvl = Math.floor(avgIlvl * 0.85); // Scarta oggetti sotto l'85% dell'ilvl medio
+
+  // Filter bag items: remove items way below equipped ilvl
+  var filteredBags = bagItems.filter(function(item) {
+    if (!item.ilvl) return true; // Keep items without ilvl info
+    var itemIlvl = parseInt(item.ilvl);
+    var equippedSlotIlvl = equippedIlvls[item.slot] || avgIlvl;
+    // Skip if item ilvl is more than 30 below the equipped slot OR below 85% of avg
+    if (itemIlvl < equippedSlotIlvl - 30 || itemIlvl < minIlvl) {
+      console.log('[topgear] Filtered out low ilvl item: ' + item.name + ' (' + item.ilvl + ' vs equipped ' + equippedSlotIlvl + ')');
+      return false;
+    }
+    return true;
+  });
+
   return {
     baseProfile: profileLines.join('\n'),
-    bagItems: bagItems
+    bagItems: filteredBags,
+    skippedLowIlvl: bagItems.length - filteredBags.length,
+    avgIlvl: Math.round(avgIlvl),
+    minIlvl: minIlvl
   };
 }
 
@@ -250,7 +282,7 @@ app.post('/api/simulate', function(req, res) {
 
     runWithRetry(input, [], 20);
 
-    res.json({ jobId: jobId, bagItems: bagItems.length });
+    res.json({ jobId: jobId, bagItems: bagItems.length, skippedLowIlvl: parsed.skippedLowIlvl || 0, avgIlvl: parsed.avgIlvl || 0 });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

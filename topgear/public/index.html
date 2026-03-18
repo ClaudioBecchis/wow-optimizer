@@ -115,7 +115,9 @@ function startSim() {
     body: JSON.stringify({ simcProfile: text })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.error) { showError(data.error); document.getElementById('btnSim').disabled = false; return; }
-    document.getElementById('bagCount').textContent = data.bagItems + ' oggetti dalla borsa trovati';
+    var bagText = data.bagItems + ' oggetti dalla borsa da simulare';
+    if (data.skippedLowIlvl > 0) bagText += ' (' + data.skippedLowIlvl + ' scartati per ilvl troppo basso, media equipaggiato: ' + data.avgIlvl + ')';
+    document.getElementById('bagCount').textContent = bagText;
     document.getElementById('bagCount').classList.remove('hidden');
     pollJob(data.jobId);
   }).catch(function(e) {
