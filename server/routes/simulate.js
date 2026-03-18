@@ -183,12 +183,30 @@ router.get('/status/:jobId', (req, res) => {
       return res.status(404).json({ error: 'Simulation not found' });
     }
 
-    return res.json({
+    const response = {
       id: sim.id,
       status: sim.status,
       progress: sim.progress || 0,
       error_message: sim.error_message || null
-    });
+    };
+
+    // Include result data when simulation is done
+    if (sim.status === 'done' || sim.status === 'completed') {
+      response.dps = sim.dps || null;
+      response.stat_weights_json = sim.stat_weights_json || null;
+      response.duration_seconds = sim.duration_seconds || null;
+      response.type = sim.type || null;
+
+      // Build a result object that renderSimResult can consume
+      response.result = {
+        dps: sim.dps || null,
+        stat_weights_json: sim.stat_weights_json || null,
+        type: sim.type || null,
+        duration: sim.duration_seconds || null
+      };
+    }
+
+    return res.json(response);
   } catch (err) {
     console.error('[simulate] Error getting simulation status:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -229,10 +247,21 @@ router.get('/result/:jobId', (req, res) => {
       updated_at: sim.updated_at
     };
 
+    // Include DPS from the sim object directly (simc-runner saves it here)
+    if (sim.dps) {
+      response.dps = sim.dps;
+    }
+
+    // Include stat weights if available
+    if (sim.stat_weights_json) {
+      response.stat_weights_json = sim.stat_weights_json;
+    }
+
     // Add formatted stat weights if available
     try {
-      if (sim.results && sim.results.stat_weights && sim.type === 'stat_weights') {
-        const weights = sim.results.stat_weights;
+      const weights = sim.stat_weights_json
+        || (sim.results && sim.results.stat_weights ? sim.results.stat_weights : null);
+      if (weights && sim.type === 'stat_weights') {
         const display = [];
         for (const [stat, value] of Object.entries(weights)) {
           try {
@@ -280,7 +309,7 @@ router.get('/history/:charId', (req, res) => {
           type: s.type,
           status: s.status,
           progress: s.progress || 0,
-          dps: s.results && s.results.dps ? s.results.dps : null,
+          dps: s.dps || (s.results && s.results.dps ? s.results.dps : null),
           error_message: s.error_message || null,
           created_at: s.created_at,
           updated_at: s.updated_at

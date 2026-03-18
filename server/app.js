@@ -7,6 +7,7 @@ const path = require('path');
 const characterRoutes = require('./routes/character');
 const simulateRoutes = require('./routes/simulate');
 const configRoutes = require('./routes/config');
+const optimizeRoutes = require('./routes/optimize');
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -58,6 +59,12 @@ try {
   app.use('/api/config', configRoutes);
 } catch (err) {
   console.error('[app] Failed to mount config routes:', err);
+}
+
+try {
+  app.use('/api/optimize', optimizeRoutes);
+} catch (err) {
+  console.error('[app] Failed to mount optimize routes:', err);
 }
 
 // --------------- SPA Fallback ---------------

@@ -49,6 +49,30 @@ var STAT_COLORS = {
   versatilityrating: '#1eff00',
 };
 
+// SimC scale_factors output uses these capitalized short keys
+var SIMC_STAT_MAP = {
+  'Agi': { name: 'Agility', color: '#ffd100' },
+  'Str': { name: 'Strength', color: '#ffd100' },
+  'Int': { name: 'Intellect', color: '#ffd100' },
+  'Crit': { name: 'Critical Strike', color: '#bf616a' },
+  'Haste': { name: 'Haste', color: '#ebcb8b' },
+  'Mastery': { name: 'Mastery', color: '#a335ee' },
+  'Vers': { name: 'Versatility', color: '#1eff00' },
+  'AP': { name: 'Attack Power', color: '#c4a35a' },
+};
+
+// Map SimC keys to Pawn stat names
+var SIMC_PAWN_MAP = {
+  'Agi': 'Agility',
+  'Str': 'Strength',
+  'Int': 'Intellect',
+  'Crit': 'CritRating',
+  'Haste': 'HasteRating',
+  'Mastery': 'MasteryRating',
+  'Vers': 'Versatility',
+  'AP': 'Ap',
+};
+
 var GEAR_SLOTS = [
   'head', 'neck', 'shoulder', 'back', 'chest', 'wrist',
   'hands', 'waist', 'legs', 'feet', 'finger1', 'finger2',
@@ -1257,7 +1281,7 @@ function generatePawnString(weights, charName) {
 
     var name = charName || (currentChar ? (currentChar.name || 'SimC') : 'SimC');
 
-    // Map SimC stat keys to Pawn stat names
+    // Map old-format stat keys to Pawn stat names
     var pawnMap = {
       strength: 'Strength',
       agility: 'Agility',
@@ -1280,13 +1304,20 @@ function generatePawnString(weights, charName) {
     var parts = [];
     Object.keys(weights).forEach(function (key) {
       try {
+        var val = parseFloat(weights[key]);
+        if (isNaN(val) || val <= 0) return;
+
+        // Check SimC format first (Agi, Crit, Haste, etc.)
+        if (SIMC_PAWN_MAP[key]) {
+          parts.push(SIMC_PAWN_MAP[key] + '=' + val.toFixed(2));
+          return;
+        }
+
+        // Fall back to old format
         var lk = key.toLowerCase().replace(/[\s-]/g, '_');
         var pawnName = pawnMap[lk] || pawnMap[lk.replace(/_/g, '')] || null;
         if (pawnName) {
-          var val = parseFloat(weights[key]);
-          if (!isNaN(val) && val > 0) {
-            parts.push(pawnName + '=' + val.toFixed(2));
-          }
+          parts.push(pawnName + '=' + val.toFixed(2));
         }
       } catch (_) { /* ignore */ }
     });
@@ -1312,7 +1343,16 @@ function renderSimResult(result, type) {
       // Stat weights
       html += '<h3 style="color:#eee;margin-top:0;">Stat Weights</h3>';
 
-      var weights = result.statWeights || result.stat_weights || result.weights || {};
+      // Try stat_weights_json first (the raw SimC scale_factors saved by simc-runner),
+      // then fall back to the other possible keys
+      var weights = result.stat_weights_json
+        || result.statWeights || result.stat_weights || result.weights || {};
+
+      // If weights is a string (e.g. from DB JSON serialization), parse it
+      if (typeof weights === 'string') {
+        try { weights = JSON.parse(weights); } catch (_) { weights = {}; }
+      }
+
       var dps = result.dps || result.baseDps || result.base_dps || null;
 
       if (dps) {
@@ -1371,10 +1411,15 @@ function renderStatBars(weights) {
   try {
     if (!weights || typeof weights !== 'object') return '<p style="color:#888;">No stat weight data.</p>';
 
+    // If weights is a string (e.g. from DB JSON serialization), parse it
+    if (typeof weights === 'string') {
+      try { weights = JSON.parse(weights); } catch (_) { return '<p style="color:#888;">No stat weight data.</p>'; }
+    }
+
     var entries = [];
     var maxVal = 0;
 
-    // Friendly display names
+    // Old-format display names (lowercase/snake_case keys)
     var displayNames = {
       strength: 'Strength',
       agility: 'Agility',
@@ -1397,11 +1442,28 @@ function renderStatBars(weights) {
     Object.keys(weights).forEach(function (key) {
       try {
         var val = parseFloat(weights[key]) || 0;
+
+        // Filter out zero and negative values
+        if (val <= 0) return;
+
+        // Check SimC format first (Agi, Crit, Haste, Mastery, Vers, etc.)
+        var simcInfo = SIMC_STAT_MAP[key];
+        if (simcInfo) {
+          if (val > maxVal) maxVal = val;
+          entries.push({ stat: key, label: simcInfo.name, value: val, color: simcInfo.color });
+          return;
+        }
+
+        // Skip unknown SimC keys like Wdps, WOHdps
+        if (key === 'Wdps' || key === 'WOHdps') return;
+
+        // Fall back to old format
         if (val > maxVal) maxVal = val;
         var normalizedKey = key.toLowerCase().replace(/[\s-]/g, '_');
         var displayKey = normalizedKey.replace(/_/g, '');
         var label = displayNames[normalizedKey] || displayNames[displayKey] || key;
-        entries.push({ stat: key, label: label, value: val, colorKey: displayKey });
+        var color = STAT_COLORS[displayKey] || '#3498db';
+        entries.push({ stat: key, label: label, value: val, color: color });
       } catch (_) { /* ignore */ }
     });
 
@@ -1415,7 +1477,6 @@ function renderStatBars(weights) {
     entries.forEach(function (entry) {
       try {
         var pct = ((entry.value / maxVal) * 100).toFixed(1);
-        var color = STAT_COLORS[entry.colorKey] || '#3498db';
 
         html += '<div class="stat-bar-row">'
           + '<div style="display:flex;justify-content:space-between;margin-bottom:3px;">'
@@ -1425,8 +1486,8 @@ function renderStatBars(weights) {
           + entry.value.toFixed(2) + '</span>'
           + '</div>'
           + '<div style="background:#0a0a1a;border-radius:4px;height:22px;overflow:hidden;position:relative;">'
-          + '<div style="background:' + color + ';width:' + pct + '%;height:100%;'
-          + 'border-radius:4px;transition:width 0.4s ease;box-shadow:0 0 6px ' + color + '44;"></div>'
+          + '<div style="background:' + entry.color + ';width:' + pct + '%;height:100%;'
+          + 'border-radius:4px;transition:width 0.4s ease;box-shadow:0 0 6px ' + entry.color + '44;"></div>'
           + '</div></div>';
       } catch (_) { /* ignore */ }
     });
@@ -1702,20 +1763,59 @@ async function loadOptimizations() {
       + '<div class="loading">Loading optimization data...</div>'
       + '</div>';
 
-    // Fetch all optimization data in parallel
-    var results = await Promise.all([
-      apiFetch('/optimize/' + encodeURIComponent(charId) + '/stat-weights', 'GET'),
-      apiFetch('/optimize/' + encodeURIComponent(charId) + '/bis', 'GET'),
-      apiFetch('/optimize/' + encodeURIComponent(charId) + '/enchants', 'GET'),
-      apiFetch('/optimize/' + encodeURIComponent(charId) + '/gems', 'GET'),
-      apiFetch('/optimize/' + encodeURIComponent(charId) + '/upgrades', 'GET'),
-    ]);
+    // First, check if stat weights are available
+    var statWeightsData = await apiFetch('/optimize/' + encodeURIComponent(charId) + '/stat-weights', 'GET');
 
-    var statWeightsData = results[0];
-    var bisData = results[1];
-    var enchantsData = results[2];
-    var gemsData = results[3];
-    var upgradesData = results[4];
+    // Determine if we have valid stat weights
+    var hasStatWeights = false;
+    var weights = null;
+
+    if (!statWeightsData.error) {
+      weights = statWeightsData.stat_weights_json || statWeightsData.statWeights
+        || statWeightsData.stat_weights || statWeightsData.weights || null;
+
+      // Parse if string
+      if (typeof weights === 'string') {
+        try { weights = JSON.parse(weights); } catch (_) { weights = null; }
+      }
+
+      if (weights && typeof weights === 'object' && Object.keys(weights).length > 0) {
+        // Check that at least one value is > 0
+        hasStatWeights = Object.keys(weights).some(function (k) {
+          return parseFloat(weights[k]) > 0;
+        });
+      }
+    }
+
+    var noWeightsMsg = '<div style="padding:16px;background:#2c2c1a;border:1px solid #f39c12;'
+      + 'border-radius:6px;color:#f39c12;text-align:center;">'
+      + '<p style="margin:0 0 8px 0;font-weight:bold;">Esegui prima Stat Weights</p>'
+      + '<p style="margin:0;color:#ccc;font-size:13px;">Go to the Simulate page and run '
+      + '"Calculate Stat Weights" first to enable optimization recommendations.</p>'
+      + '</div>';
+
+    // If we have stat weights, fetch other optimization data in parallel
+    var bisData = { error: 'no_stat_weights' };
+    var enchantsData = { error: 'no_stat_weights' };
+    var gemsData = { error: 'no_stat_weights' };
+    var upgradesData = { error: 'no_stat_weights' };
+
+    if (hasStatWeights) {
+      try {
+        var optResults = await Promise.all([
+          apiFetch('/optimize/' + encodeURIComponent(charId) + '/bis', 'GET'),
+          apiFetch('/optimize/' + encodeURIComponent(charId) + '/enchants', 'GET'),
+          apiFetch('/optimize/' + encodeURIComponent(charId) + '/gems', 'GET'),
+          apiFetch('/optimize/' + encodeURIComponent(charId) + '/upgrades', 'GET'),
+        ]);
+        bisData = optResults[0];
+        enchantsData = optResults[1];
+        gemsData = optResults[2];
+        upgradesData = optResults[3];
+      } catch (optErr) {
+        console.error('loadOptimizations: error fetching optimization data', optErr);
+      }
+    }
 
     var html = '<div class="opt-page">'
       + '<h2 style="color:#eee;">Optimization &mdash; ' + escapeHtml(name) + '</h2>';
@@ -1727,11 +1827,25 @@ async function loadOptimizations() {
 
     if (statWeightsData.error) {
       html += '<p style="color:#888;">Could not load stat weights: '
-        + escapeHtml(statWeightsData.error) + '</p>';
+        + escapeHtml(String(statWeightsData.error)) + '</p>';
+    } else if (!hasStatWeights) {
+      html += noWeightsMsg;
     } else {
-      var weights = statWeightsData.statWeights || statWeightsData.stat_weights
-        || statWeightsData.weights || statWeightsData;
       html += renderStatBars(weights);
+
+      // Also show Pawn string on the optimization page
+      var pawnStr = generatePawnString(weights);
+      if (pawnStr) {
+        html += '<div class="panel" style="margin-top:16px;background:#1a1a2e;padding:12px;border-radius:6px;">'
+          + '<div class="panel-title" style="color:#ffd100;font-weight:bold;margin-bottom:8px;">Pawn Import String</div>'
+          + '<input type="text" readonly value="' + escapeHtml(pawnStr) + '" onclick="this.select()" '
+          + 'style="width:100%;font-family:monospace;font-size:11px;background:#0a0a1a;color:#ccc;'
+          + 'border:1px solid #444;border-radius:4px;padding:6px;box-sizing:border-box;" />'
+          + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value)" '
+          + 'style="margin-top:6px;padding:4px 12px;background:#ffd100;color:#000;border:none;'
+          + 'border-radius:4px;cursor:pointer;font-weight:bold;">Copia</button>'
+          + '</div>';
+      }
     }
     html += '</div>';
 
@@ -1740,9 +1854,14 @@ async function loadOptimizations() {
       + 'border-radius:6px;margin-bottom:16px;">'
       + '<h3 style="color:#eee;margin-top:0;">Best in Slot</h3>';
 
-    if (bisData.error) {
+    if (!hasStatWeights) {
+      html += noWeightsMsg;
+    } else if (bisData.error) {
       html += '<p style="color:#888;">Could not load BiS list: '
-        + escapeHtml(bisData.error) + '</p>';
+        + escapeHtml(String(bisData.error)) + '</p>';
+    } else if (bisData.raw) {
+      // API returned non-JSON (likely HTML error page) — handle gracefully
+      html += '<p style="color:#888;">Could not load BiS list. Server returned unexpected response.</p>';
     } else {
       html += renderBisList(bisData);
     }
@@ -1753,9 +1872,13 @@ async function loadOptimizations() {
       + 'border-radius:6px;margin-bottom:16px;">'
       + '<h3 style="color:#eee;margin-top:0;">Recommended Enchants</h3>';
 
-    if (enchantsData.error) {
+    if (!hasStatWeights) {
+      html += noWeightsMsg;
+    } else if (enchantsData.error) {
       html += '<p style="color:#888;">Could not load enchant recommendations: '
-        + escapeHtml(enchantsData.error) + '</p>';
+        + escapeHtml(String(enchantsData.error)) + '</p>';
+    } else if (enchantsData.raw) {
+      html += '<p style="color:#888;">Could not load enchant recommendations. Server returned unexpected response.</p>';
     } else {
       html += renderEnchantRecs(enchantsData);
     }
@@ -1766,9 +1889,13 @@ async function loadOptimizations() {
       + 'border-radius:6px;margin-bottom:16px;">'
       + '<h3 style="color:#eee;margin-top:0;">Recommended Gems</h3>';
 
-    if (gemsData.error) {
+    if (!hasStatWeights) {
+      html += noWeightsMsg;
+    } else if (gemsData.error) {
       html += '<p style="color:#888;">Could not load gem recommendations: '
-        + escapeHtml(gemsData.error) + '</p>';
+        + escapeHtml(String(gemsData.error)) + '</p>';
+    } else if (gemsData.raw) {
+      html += '<p style="color:#888;">Could not load gem recommendations. Server returned unexpected response.</p>';
     } else {
       html += renderGemRecs(gemsData);
     }
@@ -1779,9 +1906,13 @@ async function loadOptimizations() {
       + 'border-radius:6px;margin-bottom:16px;">'
       + '<h3 style="color:#eee;margin-top:0;">Upgrade Priority</h3>';
 
-    if (upgradesData.error) {
+    if (!hasStatWeights) {
+      html += noWeightsMsg;
+    } else if (upgradesData.error) {
       html += '<p style="color:#888;">Could not load upgrade data: '
-        + escapeHtml(upgradesData.error) + '</p>';
+        + escapeHtml(String(upgradesData.error)) + '</p>';
+    } else if (upgradesData.raw) {
+      html += '<p style="color:#888;">Could not load upgrade data. Server returned unexpected response.</p>';
     } else {
       html += renderUpgradeTable(upgradesData);
     }

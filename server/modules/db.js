@@ -249,12 +249,21 @@ function getLatestStatWeights(charId) {
     const data = load();
     const numId = Number(charId);
     const sims = data.simulations
-      .filter((s) => s.character_id === numId && s.type === 'stat_weights' && s.status === 'completed')
+      .filter((s) => s.character_id === numId && s.type === 'stat_weights' && (s.status === 'done' || s.status === 'completed'))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     if (sims.length === 0) {
       return null;
     }
-    return sims[0].results ? sims[0].results.stat_weights || null : null;
+    // simc-runner saves scale_factors directly as stat_weights_json on the sim object
+    const sim = sims[0];
+    if (sim.stat_weights_json) {
+      return sim.stat_weights_json;
+    }
+    // Fallback: check nested results.stat_weights for older data
+    if (sim.results && sim.results.stat_weights) {
+      return sim.results.stat_weights;
+    }
+    return null;
   } catch (err) {
     console.error('[db] Error getting latest stat weights:', err);
     return null;
