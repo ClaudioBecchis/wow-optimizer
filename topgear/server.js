@@ -139,7 +139,7 @@ function parseResults(jobId, jsonFile, htmlFile, inputFile, duration, itemMap) {
         var delta = Math.round(ps.mean - baselineDps);
         var info = (itemMap && itemMap[ps.name]) || {};
         results.push({
-          name: ps.name,
+          name: info.name || ps.name,
           dps: Math.round(ps.mean),
           delta: delta,
           pct: ((ps.mean - baselineDps) / baselineDps * 100).toFixed(2),
@@ -217,12 +217,12 @@ app.post('/api/simulate', function(req, res) {
     // Build item map for results enrichment
     var itemMap = {};
 
-    // Add each bag item as a profileset
+    // Add each bag item as a profileset - use safe ID as profileset name
     bagItems.forEach(function(item, i) {
-      var name = item.name || ('Bag_' + (i + 1));
-      name = name.replace(/"/g, '').substring(0, 50);
-      itemMap[name] = { slot: item.slot, itemId: item.itemId, ilvl: item.ilvl, name: item.name };
-      input += 'profileset."' + name + '"+=' + item.gear + '\n';
+      var displayName = item.name || ('Bag ' + (i + 1));
+      var safeName = item.slot + '_' + (i + 1) + '_' + (item.itemId || '0');
+      itemMap[safeName] = { slot: item.slot, itemId: item.itemId, ilvl: item.ilvl, name: displayName };
+      input += 'profileset."' + safeName + '"+=' + item.gear + '\n';
     });
 
     fs.writeFileSync(inputFile, input);
