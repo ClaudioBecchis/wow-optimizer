@@ -278,8 +278,12 @@ function parseAndStoreResults(job) {
   const jsonFile = path.join(TMP_DIR, `sim_${job.simId}.json`);
 
   try {
+    console.log(`[simc-runner] parseAndStoreResults: sim ${job.simId}, type=${job.type}, jsonFile=${jsonFile}`);
+    console.log(`[simc-runner] File exists: ${fs.existsSync(jsonFile)}`);
+
     if (fs.existsSync(jsonFile)) {
       const raw = fs.readFileSync(jsonFile, 'utf-8');
+      console.log(`[simc-runner] JSON file size: ${raw.length} bytes`);
       const resultData = JSON.parse(raw);
 
       let dps = 0;
@@ -288,16 +292,25 @@ function parseAndStoreResults(job) {
 
       // Extract DPS
       try {
-        if (resultData.sim && resultData.sim.players && resultData.sim.players.length > 0) {
+        const hasSim = !!(resultData.sim);
+        const hasPlayers = !!(resultData.sim && resultData.sim.players);
+        const playerCount = hasPlayers ? resultData.sim.players.length : 0;
+        console.log(`[simc-runner] hasSim=${hasSim}, hasPlayers=${hasPlayers}, playerCount=${playerCount}`);
+
+        if (playerCount > 0) {
           const player = resultData.sim.players[0];
+          console.log(`[simc-runner] Player name: ${player.name}, has collected_data: ${!!player.collected_data}`);
 
           dps = player.collected_data && player.collected_data.dps
             ? player.collected_data.dps.mean || 0
             : 0;
+          console.log(`[simc-runner] Extracted DPS: ${dps}`);
 
           // Stat weights (only for stat_weights sims)
+          console.log(`[simc-runner] job.type='${job.type}', has scale_factors: ${!!player.scale_factors}`);
           if (job.type === 'stat_weights' && player.scale_factors) {
             statWeights = player.scale_factors;
+            console.log(`[simc-runner] Extracted stat weights: ${JSON.stringify(statWeights)}`);
           }
         }
       } catch (extractErr) {
@@ -313,6 +326,7 @@ function parseAndStoreResults(job) {
         console.error('[simc-runner] Error extracting metadata:', metaErr);
       }
 
+      console.log(`[simc-runner] Saving to DB: dps=${dps}, statWeights=${!!statWeights}, duration=${duration}`);
       db.updateSimulation(job.simId, {
         status: 'done',
         progress: 100,
