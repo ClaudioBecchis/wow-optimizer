@@ -38,6 +38,35 @@ let tokenExpiresAt = 0;
 // --------------- Helpers ---------------
 
 /**
+ * Convert a display name (realm or character) into a Blizzard-API-compatible slug.
+ *
+ * Steps:
+ *  1. Lowercase
+ *  2. Unicode NFD decomposition → strip combining diacritical marks (accents)
+ *  3. Remove apostrophes / quotes entirely (not replaced with dash)
+ *  4. Replace spaces with dashes
+ *  5. Strip any character that is not a-z, 0-9, or dash
+ *  6. Collapse consecutive dashes
+ *  7. Trim leading / trailing dashes
+ *
+ * Examples:
+ *   "Pozzo dell'Eternità" → "pozzo-delleternita"
+ *   "Aggra (Português)"   → "aggra-portugues"
+ *   "Twisting Nether"     → "twisting-nether"
+ */
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')   // strip diacritical marks
+    .replace(/[''‛'"`]/g, '')          // remove apostrophes and quotes
+    .replace(/\s+/g, '-')             // spaces → dashes
+    .replace(/[^a-z0-9-]/g, '')       // keep only a-z, 0-9, dash
+    .replace(/-{2,}/g, '-')           // collapse multiple dashes
+    .replace(/^-+|-+$/g, '');         // trim leading/trailing dashes
+}
+
+/**
  * Retrieve and cache an OAuth2 access token using client_credentials flow.
  */
 async function getAccessToken() {
@@ -208,8 +237,8 @@ function parseEquipmentItem(item) {
 async function importCharacter(realm, name, region) {
   try {
     const effectiveRegion = (region || db.getConfig('blizzard_region') || 'eu').toLowerCase();
-    const realmSlug = realm.toLowerCase().replace(/\s+/g, '-');
-    const charName = name.toLowerCase();
+    const realmSlug = slugify(realm);
+    const charName = slugify(name);
     const profileNs = `profile-${effectiveRegion}`;
     const basePath = `/profile/wow/character/${encodeURIComponent(realmSlug)}/${encodeURIComponent(charName)}`;
 
