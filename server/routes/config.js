@@ -33,7 +33,10 @@ const ALLOWED_KEYS = [
   'simc_iterations',
   'default_fight_style',
   'default_fight_duration',
-  'default_target_count'
+  'default_target_count',
+  'blizzard_client_id',
+  'blizzard_client_secret',
+  'blizzard_region'
 ];
 
 // GET /api/config
@@ -161,6 +164,17 @@ router.post('/test-simc', async (req, res) => {
   } catch (err) {
     console.error('[config] Error testing SimC:', err);
     return res.status(500).json({ ok: false, message: 'Internal server error' });
+  }
+});
+
+// POST /api/config/test-blizzard
+router.post('/test-blizzard', async (req, res) => {
+  try {
+    const blizzard = require('../modules/blizzard-api');
+    const result = await blizzard.testConnection();
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ ok: false, message: err.message });
   }
 });
 
