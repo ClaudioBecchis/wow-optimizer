@@ -42,26 +42,26 @@ let tokenExpiresAt = 0;
  *
  * Steps:
  *  1. Lowercase
- *  2. Unicode NFD decomposition → strip combining diacritical marks (accents)
- *  3. Remove apostrophes / quotes entirely (not replaced with dash)
- *  4. Replace spaces with dashes
- *  5. Strip any character that is not a-z, 0-9, or dash
- *  6. Collapse consecutive dashes
- *  7. Trim leading / trailing dashes
+ *  2. Remove apostrophes / quotes entirely (join the surrounding words)
+ *  3. Replace spaces with dashes
+ *  4. Strip any character that is not a-z, 0-9, dash, or accented letter
+ *  5. Collapse consecutive dashes
+ *  6. Trim leading / trailing dashes
+ *
+ * Accented characters (à, è, é, ö, etc.) are PRESERVED because Blizzard
+ * realm slugs require them.
  *
  * Examples:
- *   "Pozzo dell'Eternità" → "pozzo-delleternita"
- *   "Aggra (Português)"   → "aggra-portugues"
+ *   "Pozzo dell'Eternità" → "pozzo-delleternità"
+ *   "Aggra (Português)"   → "aggra-português"
  *   "Twisting Nether"     → "twisting-nether"
  */
 function slugify(text) {
   return text
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')   // strip diacritical marks
     .replace(/[''‛'"`]/g, '')          // remove apostrophes and quotes
     .replace(/\s+/g, '-')             // spaces → dashes
-    .replace(/[^a-z0-9-]/g, '')       // keep only a-z, 0-9, dash
+    .replace(/[^a-z0-9\u00C0-\u024F\u1E00-\u1EFF-]/g, '') // keep a-z, 0-9, dash, accented chars
     .replace(/-{2,}/g, '-')           // collapse multiple dashes
     .replace(/^-+|-+$/g, '');         // trim leading/trailing dashes
 }
@@ -130,9 +130,11 @@ async function apiGet(endpoint, region, namespace) {
     const host = REGION_HOSTS[region] || REGION_HOSTS.eu;
 
     const separator = endpoint.includes('?') ? '&' : '?';
-    const url = `${host}${endpoint}${separator}access_token=${encodeURIComponent(token)}&locale=en_US`;
+    const url = `${host}${endpoint}${separator}locale=en_US`;
 
-    const headers = {};
+    const headers = {
+      'Authorization': `Bearer ${token}`
+    };
     if (namespace) {
       headers['Battlenet-Namespace'] = namespace;
     }
