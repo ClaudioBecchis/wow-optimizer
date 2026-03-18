@@ -1,6 +1,6 @@
 'use strict';
 
-const { spawn } = require('child_process');
+const { spawn, execSync, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const db = require('./db');
@@ -9,11 +9,13 @@ const db = require('./db');
 
 const queue = [];
 let isRunning = false;
-let currentProcess = null;
+let currentProcess = null;      // Reference to the `docker run` child process (may die on restart)
 let currentJobId = null;
+let currentContainerName = null; // Name of the running Docker container (survives restart)
 
 const TMP_DIR = '/tmp/wow-optimizer';
 const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const PROGRESS_POLL_INTERVAL = 3000; // 3 seconds
 
 // Ensure temp dir exists
 function ensureTempDir() {
@@ -46,6 +48,101 @@ function getIterations(options) {
     console.error('[simc-runner] Error getting iterations config:', err);
     return '10000';
   }
+}
+
+/**
+ * Build the container name for a given simId.
+ */
+function containerName(simId) {
+  return 'simc_' + simId;
+}
+
+/**
+ * Run a docker command synchronously and return trimmed stdout.
+ * Returns null on error.
+ */
+function dockerExecSync(args, timeoutMs) {
+  try {
+    const result = execSync('docker ' + args.join(' '), {
+      encoding: 'utf-8',
+      timeout: timeoutMs || 15000,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    return (result || '').trim();
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Remove a Docker container by name (best-effort, ignores errors).
+ */
+function removeContainer(name) {
+  try {
+    execSync(`docker rm -f ${name}`, {
+      encoding: 'utf-8',
+      timeout: 10000,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    console.log(`[simc-runner] Removed container ${name}`);
+  } catch (err) {
+    // Container may already be gone – that's fine
+  }
+}
+
+/**
+ * Poll docker logs --tail 1 to extract progress for a running container.
+ * Returns a progress number (0-99) or null if unparseable.
+ */
+function pollProgressFromContainer(name) {
+  try {
+    const lastLine = dockerExecSync(['logs', '--tail', '1', name], 5000);
+    if (!lastLine) return null;
+
+    // Try N/M format first (e.g. "1234/10000")
+    const fracMatch = lastLine.match(/(\d+)\/(\d+)/);
+    if (fracMatch) {
+      const current = parseInt(fracMatch[1], 10);
+      const total = parseInt(fracMatch[2], 10);
+      if (total > 0) {
+        return Math.min(99, Math.round((current / total) * 100));
+      }
+    }
+
+    // Try percentage format (e.g. "45%")
+    const pctMatch = lastLine.match(/(\d+)%/);
+    if (pctMatch) {
+      return Math.min(99, parseInt(pctMatch[1], 10));
+    }
+
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Check if a Docker container exists (any state) by name.
+ */
+function containerExists(name) {
+  const result = dockerExecSync(['ps', '-a', '--filter', `name=^${name}$`, '--format', '{{.Names}}']);
+  return result === name;
+}
+
+/**
+ * Get the status of a Docker container ('running', 'exited', etc.) or null if not found.
+ */
+function getContainerStatus(name) {
+  return dockerExecSync(['inspect', '--format', '{{.State.Status}}', name]);
+}
+
+/**
+ * Get the exit code of a Docker container, or null if not available.
+ */
+function getContainerExitCode(name) {
+  const code = dockerExecSync(['inspect', '--format', '{{.State.ExitCode}}', name]);
+  if (code === null) return null;
+  return parseInt(code, 10);
 }
 
 // --------------- Queue ---------------
@@ -152,64 +249,7 @@ async function runJob(job) {
     await runSimcProcess(job.simId, job.type, job.options);
 
     // Parse results
-    try {
-      if (fs.existsSync(jsonFile)) {
-        const raw = fs.readFileSync(jsonFile, 'utf-8');
-        const resultData = JSON.parse(raw);
-
-        let dps = 0;
-        let statWeights = null;
-        let duration = 0;
-
-        // Extract DPS
-        try {
-          if (resultData.sim && resultData.sim.players && resultData.sim.players.length > 0) {
-            const player = resultData.sim.players[0];
-
-            dps = player.collected_data && player.collected_data.dps
-              ? player.collected_data.dps.mean || 0
-              : 0;
-
-            // Stat weights (only for stat_weights sims)
-            if (job.type === 'stat_weights' && player.scale_factors) {
-              statWeights = player.scale_factors;
-            }
-          }
-        } catch (extractErr) {
-          console.error('[simc-runner] Error extracting results:', extractErr);
-        }
-
-        // Simulation metadata - elapsed time as duration
-        try {
-          if (resultData.sim && resultData.sim.statistics) {
-            duration = resultData.sim.statistics.elapsed_cpu_seconds || 0;
-          }
-        } catch (metaErr) {
-          console.error('[simc-runner] Error extracting metadata:', metaErr);
-        }
-
-        db.updateSimulation(job.simId, {
-          status: 'done',
-          progress: 100,
-          dps: dps,
-          result_json: resultData,
-          stat_weights_json: statWeights,
-          duration_seconds: duration,
-          html_report: '/reports/sim_' + job.simId + '.html'
-        });
-      } else {
-        db.updateSimulation(job.simId, {
-          status: 'error',
-          error_message: 'SimC produced no output file'
-        });
-      }
-    } catch (parseErr) {
-      console.error('[simc-runner] Error parsing SimC results:', parseErr);
-      db.updateSimulation(job.simId, {
-        status: 'error',
-        error_message: 'Failed to parse SimC output: ' + parseErr.message
-      });
-    }
+    parseAndStoreResults(job);
 
     // Cleanup temp files (keep HTML report for viewing)
     try {
@@ -230,14 +270,88 @@ async function runJob(job) {
   }
 }
 
+/**
+ * Parse SimC JSON output and store results in the database.
+ * Extracted to a helper so it can be reused for orphan recovery.
+ */
+function parseAndStoreResults(job) {
+  const jsonFile = path.join(TMP_DIR, `sim_${job.simId}.json`);
+
+  try {
+    if (fs.existsSync(jsonFile)) {
+      const raw = fs.readFileSync(jsonFile, 'utf-8');
+      const resultData = JSON.parse(raw);
+
+      let dps = 0;
+      let statWeights = null;
+      let duration = 0;
+
+      // Extract DPS
+      try {
+        if (resultData.sim && resultData.sim.players && resultData.sim.players.length > 0) {
+          const player = resultData.sim.players[0];
+
+          dps = player.collected_data && player.collected_data.dps
+            ? player.collected_data.dps.mean || 0
+            : 0;
+
+          // Stat weights (only for stat_weights sims)
+          if (job.type === 'stat_weights' && player.scale_factors) {
+            statWeights = player.scale_factors;
+          }
+        }
+      } catch (extractErr) {
+        console.error('[simc-runner] Error extracting results:', extractErr);
+      }
+
+      // Simulation metadata - elapsed time as duration
+      try {
+        if (resultData.sim && resultData.sim.statistics) {
+          duration = resultData.sim.statistics.elapsed_cpu_seconds || 0;
+        }
+      } catch (metaErr) {
+        console.error('[simc-runner] Error extracting metadata:', metaErr);
+      }
+
+      db.updateSimulation(job.simId, {
+        status: 'done',
+        progress: 100,
+        dps: dps,
+        result_json: resultData,
+        stat_weights_json: statWeights,
+        duration_seconds: duration,
+        html_report: '/reports/sim_' + job.simId + '.html'
+      });
+    } else {
+      db.updateSimulation(job.simId, {
+        status: 'error',
+        error_message: 'SimC produced no output file'
+      });
+    }
+  } catch (parseErr) {
+    console.error('[simc-runner] Error parsing SimC results:', parseErr);
+    db.updateSimulation(job.simId, {
+      status: 'error',
+      error_message: 'Failed to parse SimC output: ' + parseErr.message
+    });
+  }
+}
+
+// --------------- Docker Process (Named Container, No --rm) ---------------
+
 function runSimcProcess(simId, type, options) {
   return new Promise((resolve, reject) => {
     try {
       const threads = getThreads(options);
       const iterations = getIterations(options);
+      const cName = containerName(simId);
+
+      // Remove any leftover container with the same name (from a previous failed run)
+      removeContainer(cName);
 
       const args = [
-        'run', '--rm',
+        'run',
+        '--name', cName,
         '--security-opt', 'apparmor=unconfined',
         '-v', `${TMP_DIR}:/sim`,
         'simulationcraftorg/simc',
@@ -258,41 +372,55 @@ function runSimcProcess(simId, type, options) {
       let proc;
       try {
         proc = spawn('docker', args, {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: TIMEOUT_MS
+          stdio: ['ignore', 'pipe', 'pipe']
         });
       } catch (spawnErr) {
         return reject(new Error('Failed to spawn Docker process: ' + spawnErr.message));
       }
 
-      // Store reference so the process can be killed externally
+      // Store references for external cancellation
       currentProcess = proc;
       currentJobId = simId;
+      currentContainerName = cName;
 
       let stdout = '';
       let stderr = '';
       let killed = false;
+      let progressTimer = null;
 
-      // Timeout
+      // Timeout – kill the container (not just the child process)
       const timer = setTimeout(() => {
         try {
           killed = true;
-          proc.kill('SIGKILL');
+          console.log(`[simc-runner] Timeout reached for ${cName}, killing container`);
+          // Kill the Docker container directly – this survives even if the child process is gone
+          try { execSync(`docker kill ${cName}`, { timeout: 10000, stdio: 'ignore' }); } catch (_) { /* ignore */ }
+          try { proc.kill('SIGKILL'); } catch (_) { /* ignore */ }
           db.updateSimulation(simId, {
             status: 'error',
             error_message: 'Simulation timed out after 10 minutes'
           });
         } catch (killErr) {
-          console.error('[simc-runner] Error killing timed-out process:', killErr);
+          console.error('[simc-runner] Error killing timed-out container:', killErr);
         }
       }, TIMEOUT_MS);
+
+      // Progress polling via docker logs --tail 1
+      progressTimer = setInterval(() => {
+        try {
+          const progress = pollProgressFromContainer(cName);
+          if (progress !== null) {
+            db.updateSimulation(simId, { progress });
+          }
+        } catch (_) { /* ignore progress poll error */ }
+      }, PROGRESS_POLL_INTERVAL);
 
       proc.stdout.on('data', (data) => {
         try {
           const text = data.toString();
           stdout += text;
 
-          // Parse progress percentage from SimC output
+          // Also parse progress directly from stdout (faster than polling)
           const progressMatch = text.match(/(\d+)\/(\d+)/);
           if (progressMatch) {
             try {
@@ -305,7 +433,6 @@ function runSimcProcess(simId, type, options) {
             } catch (_) { /* ignore progress parse error */ }
           }
 
-          // Also check for percentage format
           const pctMatch = text.match(/(\d+)%/);
           if (pctMatch) {
             try {
@@ -327,9 +454,32 @@ function runSimcProcess(simId, type, options) {
       proc.on('error', (err) => {
         try {
           clearTimeout(timer);
+          if (progressTimer) clearInterval(progressTimer);
           currentProcess = null;
           currentJobId = null;
+          currentContainerName = null;
           console.error('[simc-runner] Process error:', err);
+
+          // The child process errored, but the container may still be running.
+          // Check if the container is still alive and if so, start monitoring it.
+          if (containerExists(cName)) {
+            const status = getContainerStatus(cName);
+            if (status === 'running') {
+              console.log(`[simc-runner] Child process died but container ${cName} is still running. Monitoring...`);
+              monitorContainer(cName, simId)
+                .then(() => {
+                  removeContainer(cName);
+                  resolve();
+                })
+                .catch((monErr) => {
+                  removeContainer(cName);
+                  reject(monErr);
+                });
+              return;
+            }
+          }
+
+          removeContainer(cName);
           reject(new Error('Docker process error: ' + err.message));
         } catch (_) {
           reject(err);
@@ -339,22 +489,29 @@ function runSimcProcess(simId, type, options) {
       proc.on('close', (code) => {
         try {
           clearTimeout(timer);
+          if (progressTimer) clearInterval(progressTimer);
           currentProcess = null;
           currentJobId = null;
+          currentContainerName = null;
 
           if (killed) {
+            removeContainer(cName);
             return reject(new Error('Simulation timed out'));
           }
 
           if (code !== 0) {
             const errMsg = stderr.trim() || `Docker/SimC exited with code ${code}`;
             console.error(`[simc-runner] Docker/SimC exited with code ${code}:`, errMsg);
+            removeContainer(cName);
             return reject(new Error(errMsg));
           }
 
+          // Success – remove the container
+          removeContainer(cName);
           resolve();
         } catch (closeErr) {
           console.error('[simc-runner] Error in close handler:', closeErr);
+          removeContainer(cName);
           reject(closeErr);
         }
       });
@@ -364,6 +521,211 @@ function runSimcProcess(simId, type, options) {
       reject(err);
     }
   });
+}
+
+// --------------- Container Monitoring (for orphan recovery & child-process-died) ---------------
+
+/**
+ * Monitor a running Docker container by polling its status.
+ * Resolves when the container exits with code 0, rejects otherwise.
+ * Also polls progress from docker logs.
+ */
+function monitorContainer(cName, simId) {
+  return new Promise((resolve, reject) => {
+    console.log(`[simc-runner] Monitoring container ${cName} for sim ${simId}`);
+
+    const startTime = Date.now();
+    let resolved = false;
+
+    const pollInterval = setInterval(() => {
+      try {
+        // Check timeout
+        if (Date.now() - startTime > TIMEOUT_MS) {
+          clearInterval(pollInterval);
+          if (resolved) return;
+          resolved = true;
+          console.log(`[simc-runner] Timeout monitoring container ${cName}`);
+          try { execSync(`docker kill ${cName}`, { timeout: 10000, stdio: 'ignore' }); } catch (_) { /* ignore */ }
+          try {
+            db.updateSimulation(simId, {
+              status: 'error',
+              error_message: 'Simulation timed out after 10 minutes'
+            });
+          } catch (_) { /* ignore */ }
+          return reject(new Error('Simulation timed out'));
+        }
+
+        const status = getContainerStatus(cName);
+
+        if (status === null) {
+          // Container gone – might have been removed externally
+          clearInterval(pollInterval);
+          if (resolved) return;
+          resolved = true;
+          return reject(new Error('Container disappeared unexpectedly'));
+        }
+
+        if (status === 'running') {
+          // Still running – poll progress
+          const progress = pollProgressFromContainer(cName);
+          if (progress !== null) {
+            try { db.updateSimulation(simId, { progress }); } catch (_) { /* ignore */ }
+          }
+          return; // Keep polling
+        }
+
+        if (status === 'exited') {
+          clearInterval(pollInterval);
+          if (resolved) return;
+          resolved = true;
+
+          const exitCode = getContainerExitCode(cName);
+          console.log(`[simc-runner] Container ${cName} exited with code ${exitCode}`);
+
+          if (exitCode !== 0) {
+            // Grab stderr from docker logs
+            const logs = dockerExecSync(['logs', '--tail', '50', cName], 10000) || '';
+            return reject(new Error(`Docker/SimC exited with code ${exitCode}: ${logs.substring(0, 1000)}`));
+          }
+
+          resolve();
+          return;
+        }
+
+        // Other states (created, paused, restarting, dead, etc.) – just keep polling
+        // unless it's 'dead' which is terminal
+        if (status === 'dead') {
+          clearInterval(pollInterval);
+          if (resolved) return;
+          resolved = true;
+          return reject(new Error('Container entered dead state'));
+        }
+
+      } catch (pollErr) {
+        console.error('[simc-runner] Error polling container status:', pollErr);
+        // Don't stop polling on transient errors
+      }
+    }, PROGRESS_POLL_INTERVAL);
+  });
+}
+
+// --------------- Orphan Recovery ---------------
+
+/**
+ * On module load / server startup, check for any running simc_* containers
+ * that are leftovers from a previous Node.js process. Resume monitoring them
+ * and collect results when they finish.
+ */
+function recoverOrphanedSims() {
+  try {
+    const output = dockerExecSync([
+      'ps', '--filter', 'name=simc_', '--format', '{{.Names}}'
+    ], 10000);
+
+    if (!output) {
+      console.log('[simc-runner] No orphaned simc containers found');
+      return;
+    }
+
+    const containers = output.split('\n').filter(Boolean);
+    if (containers.length === 0) {
+      console.log('[simc-runner] No orphaned simc containers found');
+      return;
+    }
+
+    console.log(`[simc-runner] Found ${containers.length} orphaned container(s): ${containers.join(', ')}`);
+
+    containers.forEach((cName) => {
+      try {
+        // Extract simId from container name "simc_<id>"
+        const match = cName.match(/^simc_(.+)$/);
+        if (!match) {
+          console.warn(`[simc-runner] Container ${cName} does not match expected name pattern, removing`);
+          removeContainer(cName);
+          return;
+        }
+
+        const simId = match[1];
+        console.log(`[simc-runner] Recovering orphaned sim ${simId} from container ${cName}`);
+
+        // Mark as running in DB (it might already be, but make sure)
+        try {
+          db.updateSimulation(simId, { status: 'running' });
+        } catch (_) { /* ignore – sim might not exist in DB */ }
+
+        // Monitor the container asynchronously
+        monitorContainer(cName, simId)
+          .then(() => {
+            console.log(`[simc-runner] Orphaned sim ${simId} completed successfully`);
+            // Parse results – construct a minimal job object
+            parseAndStoreResults({ simId, type: 'dps' });
+            removeContainer(cName);
+          })
+          .catch((err) => {
+            console.error(`[simc-runner] Orphaned sim ${simId} failed:`, err.message);
+            try {
+              db.updateSimulation(simId, {
+                status: 'error',
+                error_message: 'Orphaned sim failed: ' + err.message
+              });
+            } catch (_) { /* ignore */ }
+            removeContainer(cName);
+          });
+
+      } catch (containerErr) {
+        console.error(`[simc-runner] Error recovering container ${cName}:`, containerErr);
+        removeContainer(cName);
+      }
+    });
+
+    // Also check for exited simc_ containers that never got cleaned up
+    try {
+      const exitedOutput = dockerExecSync([
+        'ps', '-a', '--filter', 'name=simc_', '--filter', 'status=exited',
+        '--format', '{{.Names}}'
+      ], 10000);
+
+      if (exitedOutput) {
+        const exitedContainers = exitedOutput.split('\n').filter(Boolean);
+        exitedContainers.forEach((cName) => {
+          // These are already handled by the running check above if they were running,
+          // but if they were already exited, we should try to collect results and clean up
+          const match = cName.match(/^simc_(.+)$/);
+          if (!match) {
+            removeContainer(cName);
+            return;
+          }
+
+          const simId = match[1];
+          const exitCode = getContainerExitCode(cName);
+
+          console.log(`[simc-runner] Found exited orphan container ${cName} (exit code: ${exitCode})`);
+
+          if (exitCode === 0) {
+            // Try to parse results
+            try {
+              parseAndStoreResults({ simId, type: 'dps' });
+            } catch (_) { /* ignore */ }
+          } else {
+            try {
+              const logs = dockerExecSync(['logs', '--tail', '20', cName], 10000) || '';
+              db.updateSimulation(simId, {
+                status: 'error',
+                error_message: `SimC exited with code ${exitCode}: ${logs.substring(0, 500)}`
+              });
+            } catch (_) { /* ignore */ }
+          }
+
+          removeContainer(cName);
+        });
+      }
+    } catch (exitedErr) {
+      console.error('[simc-runner] Error checking exited orphan containers:', exitedErr);
+    }
+
+  } catch (err) {
+    console.error('[simc-runner] Error in recoverOrphanedSims:', err);
+  }
 }
 
 // --------------- Test SimC ---------------
@@ -499,21 +861,52 @@ function cancelSimulation(simId) {
     }
 
     // Check if it's the currently running job
-    if (currentProcess && currentJobId !== null && Number(currentJobId) === numId) {
+    if (currentJobId !== null && Number(currentJobId) === numId) {
       console.log(`[simc-runner] Killing running simulation ${simId}`);
+
+      // Kill the Docker container directly (survives child process death)
+      const cName = currentContainerName || containerName(simId);
       try {
-        currentProcess.kill('SIGKILL');
-      } catch (killErr) {
-        console.error('[simc-runner] Error killing process:', killErr);
+        execSync(`docker kill ${cName}`, { timeout: 10000, stdio: 'ignore' });
+      } catch (_) { /* container might already be stopped */ }
+
+      // Also kill the child process if it's still around
+      if (currentProcess) {
+        try {
+          currentProcess.kill('SIGKILL');
+        } catch (killErr) {
+          console.error('[simc-runner] Error killing child process:', killErr);
+        }
       }
+
       currentProcess = null;
       currentJobId = null;
+      currentContainerName = null;
+
+      // Clean up the container
+      removeContainer(cName);
+
       try {
         db.updateSimulation(simId, { status: 'cancelled' });
       } catch (dbErr) {
         console.error('[simc-runner] Error updating cancelled simulation:', dbErr);
       }
       return { ok: true, message: 'Cancelled' };
+    }
+
+    // Check if there's a container running for this simId even though we don't track it
+    // (e.g. orphan from a previous process)
+    const cName = containerName(simId);
+    if (containerExists(cName)) {
+      console.log(`[simc-runner] Found orphan container ${cName}, killing it`);
+      try {
+        execSync(`docker kill ${cName}`, { timeout: 10000, stdio: 'ignore' });
+      } catch (_) { /* ignore */ }
+      removeContainer(cName);
+      try {
+        db.updateSimulation(simId, { status: 'cancelled' });
+      } catch (_) { /* ignore */ }
+      return { ok: true, message: 'Cancelled (orphan container)' };
     }
 
     return { ok: false, message: 'Not found' };
@@ -538,17 +931,31 @@ function cancelAll() {
       count++;
     }
 
-    // Kill the currently running process
-    if (currentProcess) {
-      console.log(`[simc-runner] Killing running simulation ${currentJobId}`);
+    // Kill the currently running container
+    if (currentContainerName || currentJobId !== null) {
+      const cName = currentContainerName || containerName(currentJobId);
       const runningId = currentJobId;
+
+      console.log(`[simc-runner] Killing running container ${cName}`);
+
       try {
-        currentProcess.kill('SIGKILL');
-      } catch (killErr) {
-        console.error('[simc-runner] Error killing process:', killErr);
+        execSync(`docker kill ${cName}`, { timeout: 10000, stdio: 'ignore' });
+      } catch (_) { /* ignore */ }
+
+      if (currentProcess) {
+        try {
+          currentProcess.kill('SIGKILL');
+        } catch (killErr) {
+          console.error('[simc-runner] Error killing process:', killErr);
+        }
       }
+
       currentProcess = null;
       currentJobId = null;
+      currentContainerName = null;
+
+      removeContainer(cName);
+
       if (runningId !== null) {
         try {
           db.updateSimulation(runningId, { status: 'cancelled' });
@@ -559,12 +966,49 @@ function cancelAll() {
       }
     }
 
+    // Also kill any orphan simc_ containers
+    try {
+      const output = dockerExecSync([
+        'ps', '--filter', 'name=simc_', '--format', '{{.Names}}'
+      ], 10000);
+
+      if (output) {
+        const orphans = output.split('\n').filter(Boolean);
+        orphans.forEach((cName) => {
+          try {
+            execSync(`docker kill ${cName}`, { timeout: 10000, stdio: 'ignore' });
+          } catch (_) { /* ignore */ }
+          removeContainer(cName);
+
+          const match = cName.match(/^simc_(.+)$/);
+          if (match) {
+            try {
+              db.updateSimulation(match[1], { status: 'cancelled' });
+            } catch (_) { /* ignore */ }
+            count++;
+          }
+        });
+      }
+    } catch (_) { /* ignore */ }
+
     console.log(`[simc-runner] cancelAll: cancelled ${count} simulations`);
     return { ok: true, cancelled: count };
   } catch (err) {
     console.error('[simc-runner] Error in cancelAll:', err);
     return { ok: false, cancelled: 0, message: 'Error: ' + err.message };
   }
+}
+
+// --------------- Startup Recovery ---------------
+
+// Run orphan recovery on module load (when server starts/restarts)
+try {
+  // Delay slightly to let the DB module initialize
+  setTimeout(() => {
+    recoverOrphanedSims();
+  }, 2000);
+} catch (err) {
+  console.error('[simc-runner] Error scheduling orphan recovery:', err);
 }
 
 // --------------- Exports ---------------
@@ -576,5 +1020,6 @@ module.exports = {
   testSimc,
   getQueueStatus,
   cancelSimulation,
-  cancelAll
+  cancelAll,
+  recoverOrphanedSims
 };
