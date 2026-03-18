@@ -201,6 +201,13 @@ function showResults(job) {
 
   document.getElementById('resultsList').innerHTML = html;
 
+  // Refresh Wowhead tooltips and rename links
+  try {
+    if (window.$WowheadPower && window.$WowheadPower.refreshLinks) {
+      window.$WowheadPower.refreshLinks();
+    }
+  } catch(e) {}
+
   // Pawn
   if (job.pawn) {
     document.getElementById('pawnBox').classList.remove('hidden');
@@ -222,6 +229,6 @@ function hideError() { document.getElementById('errorMsg').classList.add('hidden
 function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 </script>
 <script>var defined,defined;var whTooltips = {colorLinks: true, iconizeLinks: true, renameLinks: true, iconSize: 'small'};</script>
-<script src="https://wow.zamimg.com/js/tooltips.js"></script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
 </body>
 </html>

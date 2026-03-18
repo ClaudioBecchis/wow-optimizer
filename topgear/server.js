@@ -43,7 +43,12 @@ function parseSimcBags(simcText) {
         var slot = slotMatch[1];
         // Extract item name from ,name= if present
         var nameMatch = gearLine.match(/,name=([^,]+)/);
-        var itemName = nameMatch ? nameMatch[1].replace(/_/g, ' ') : slot + ' alt ' + (bagItems.length + 1);
+        var itemName = nameMatch ? nameMatch[1].replace(/_/g, ' ') : null;
+        // If no name=, try to get a readable name from the line
+        if (!itemName) {
+          var idMatch2 = gearLine.match(/,id=(\d+)/);
+          itemName = idMatch2 ? 'Item #' + idMatch2[1] : slot + ' alt ' + (bagItems.length + 1);
+        }
         var idMatch = gearLine.match(/,id=(\d+)/);
         var itemId = idMatch ? idMatch[1] : '0';
         var ilvlMatch = gearLine.match(/,ilevel=(\d+)/);
