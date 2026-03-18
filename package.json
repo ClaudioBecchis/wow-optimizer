@@ -1,0 +1,17 @@
+{
+  "name": "wow-optimizer",
+  "version": "2.0.0",
+  "description": "WoW Character Optimizer - SimulationCraft only, no external APIs",
+  "main": "server/app.js",
+  "scripts": {
+    "start": "node server/app.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.22.1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

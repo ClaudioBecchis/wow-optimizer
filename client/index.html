@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WoW Optimizer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    /* ========== RESET & BASE ========== */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-dark: #0d0a07;
+      --bg-card: #1a1510;
+      --bg-card-hover: #231d15;
+      --bg-input: #15120d;
+      --gold: #ffd100;
+      --gold-dim: #b8960a;
+      --gold-border: #8b7355;
+      --gold-dark: #5a4a32;
+      --text: #c9b98a;
+      --text-light: #e8d9b0;
+      --text-muted: #7a6c52;
+      --green: #28a745;
+      --red: #c41f3b;
+
+      /* WoW quality colors */
+      --quality-poor: #9d9d9d;
+      --quality-common: #ffffff;
+      --quality-uncommon: #1eff00;
+      --quality-rare: #0070dd;
+      --quality-epic: #a335ee;
+      --quality-legendary: #ff8000;
+      --quality-artifact: #e6cc80;
+
+      /* WoW class colors */
+      --class-warrior: #C79C6E;
+      --class-paladin: #F58CBA;
+      --class-hunter: #ABD473;
+      --class-rogue: #FFF569;
+      --class-priest: #FFFFFF;
+      --class-deathknight: #C41F3B;
+      --class-shaman: #0070DE;
+      --class-mage: #69CCF0;
+      --class-warlock: #9482C9;
+      --class-monk: #00FF96;
+      --class-druid: #FF7D0A;
+      --class-demonhunter: #A330C9;
+      --class-evoker: #33937F;
+
+      --sidebar-width: 210px;
+      --font-title: 'Cinzel', serif;
+      --font-body: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font-body);
+      background: var(--bg-dark);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ========== SCROLLBAR ========== */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-dark); }
+    ::-webkit-scrollbar-thumb { background: var(--gold-border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+    /* ========== LAYOUT ========== */
+    .app-layout {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ========== SIDEBAR ========== */
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      height: 100vh;
+      background: linear-gradient(180deg, #151009 0%, #0d0a07 100%);
+      border-right: 2px solid var(--gold-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .sidebar-logo {
+      padding: 20px 14px 16px;
+      text-align: center;
+      border-bottom: 1px solid var(--gold-dark);
+    }
+
+    .sidebar-logo h1 {
+      font-family: var(--font-title);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gold);
+      text-shadow: 0 0 12px rgba(255, 209, 0, 0.4), 0 0 30px rgba(255, 209, 0, 0.15);
+      letter-spacing: 1px;
+      line-height: 1.3;
+    }
+
+    .server-indicator {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--gold-dark);
+    }
+
+    .server-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(40, 167, 69, 0.6);
+      flex-shrink: 0;
+    }
+
+    .server-dot.offline {
+      background: var(--red);
+      box-shadow: 0 0 6px rgba(196, 31, 59, 0.6);
+    }
+
+    .server-indicator span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-section-label {
+      font-family: var(--font-title);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--gold-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 14px 14px 6px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border-left: 3px solid transparent;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      background: rgba(139, 115, 85, 0.12);
+      color: var(--text-light);
+    }
+
+    .nav-item.active {
+      background: rgba(255, 209, 0, 0.07);
+      border-left-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .nav-item .nav-icon {
+      font-size: 15px;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--gold-dark);
+      padding: 8px;
+    }
+
+    .sidebar-footer .nav-item {
+      border-left: none;
+      justify-content: center;
+      border-radius: 4px;
+    }
+
+    /* ========== CONTENT ========== */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px;
+      min-width: 0;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .page-title {
+      font-family: var(--font-title);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 20px;
+      text-shadow: 0 0 10px rgba(255, 209, 0, 0.3);
+    }
+
+    .page-subtitle {
+      font-family: var(--font-title);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--gold-dim);
+      margin: 24px 0 12px;
+      text-shadow: 0 0 6px rgba(255, 209, 0, 0.15);
+    }
+
+    /* ========== BUTTONS ========== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 18px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--gold-border);
+      border-radius: 4px;
+      background: linear-gradient(180deg, #3a2e1e 0%, #2a2018 50%, #1e1810 100%);
+      color: var(--text-light);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: linear-gradient(180deg, #4a3e2e 0%, #3a3028 50%, #2e2820 100%);
+      border-color: var(--gold-dim);
+      box-shadow: 0 0 10px rgba(255, 209, 0, 0.15);
+      color: var(--gold);
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #4a3a1a 0%, #3a2a0a 50%, #2a1e05 100%);
+      border-color: var(--gold-dim);
+      color: var(--gold);
+    }
+
+    .btn-primary:hover {
+      border-color: var(--gold);
+      box-shadow: 0 0 14px rgba(255, 209, 0, 0.25);
+    }
+
+    .btn-green {
+      background: linear-gradient(180deg, #1a4a2a 0%, #0f3a1a 50%, #082a10 100%);
+      border-color: #2d7a4a;
+      color: #6fdf8f;
+    }
+
+    .btn-green:hover {
+      border-color: #3aaf5a;
+      box-shadow: 0 0 14px rgba(40, 167, 69, 0.3);
+      color: #90ffb0;
+    }
+
+    .btn-danger {
+      background: linear-gradient(180deg, #4a1a1a 0%, #3a0a0a 50%, #2a0505 100%);
+      border-color: #7a3030;
+      color: #e88;
+    }
+
+    .btn-danger:hover {
+      border-color: #af3a3a;
+      box-shadow: 0 0 10px rgba(196, 31, 59, 0.3);
+    }
+
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+    .btn-lg {
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: var(--font-title);
+      letter-spacing: 0.5px;
+    }
+
+    /* ========== INPUTS ========== */
+    input[type="text"],
+    input[type="number"],
+    input[type="password"],
+    select,
+    textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--gold-dark);
+      border-radius: 4px;
+      color: var(--text-light);
+      padding: 8px 12px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      transition: border-color 0.2s ease;
+      width: 100%;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--gold-border);
+      box-shadow: 0 0 6px rgba(255, 209, 0, 0.1);
+    }
+
+    textarea { resize: vertical; min-height: 100px; }
+
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b7355'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+      cursor: pointer;
+    }
+
+    select option { background: var(--bg-dark); color: var(--text-light); }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .form-group { margin-bottom: 14px; }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .form-row .form-group { flex: 1; margin-bottom: 0; }
+
+    /* ========== CARDS ========== */
+    .card {
+      background: linear-gradient(180deg, #1a1510 0%, #14100b 100%);
+      border: 1px solid var(--gold-dark);
+      border-top: 2px solid var(--gold-border);
+      border-radius: 6px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      font-family: var(--font-title);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+
+    /* ========== STAT CARDS ROW ========== */
+    .stat-cards {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: linear-gradient(180deg, #1e1810 0%, #151009 100%);
+      border: 1px solid var(--gold-dark);
+      border-top: 2px solid var(--gold-border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      min-width: 120px;
+      text-align: center;
+    }
+
+    .stat-card .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-card .stat-value {
+      font-family: var(--font-title);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    /* ========== TABLES ========== */
+    .wow-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .wow-table thead th {
+      background: linear-gradient(180deg, #2a2218 0%, #1e1810 100%);
+      color: var(--gold);
+      font-family: var(--font-title);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 2px solid var(--gold-border);
+      white-space: nowrap;
+    }
+
+    .wow-table tbody tr {
+      border-bottom: 1px solid rgba(139, 115, 85, 0.15);
+      transition: background 0.15s ease;
+    }
+
+    .wow-table tbody tr:hover {
+      background: rgba(139, 115, 85, 0.08);
+    }
+
+    .wow-table tbody td {
+      padding: 9px 12px;
+      color: var(--text);
+      vertical-align: middle;
+    }
+
+    /* ========== GEAR GRID ========== */
+    .gear-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 10px;
+    }
+
+    .gear-slot {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--gold-dark);
+      border-radius: 5px;
+      padding: 8px 10px;
+      transition: border-color 0.15s ease;
+    }
+
+    .gear-slot:hover { border-color: var(--gold-border); }
+
+    .gear-slot-icon {
+      width: 36px;
+      height: 36px;
+      border: 2px solid var(--gold-dark);
+      border-radius: 4px;
+      flex-shrink: 0;
+      object-fit: cover;
+    }
+
+    .gear-slot-info { min-width: 0; flex: 1; }
+
+    .gear-slot-name {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .gear-slot-item {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .gear-slot-meta {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .gear-ilvl {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .badge-enchant {
+      background: rgba(163, 53, 238, 0.2);
+      color: var(--quality-epic);
+      border: 1px solid rgba(163, 53, 238, 0.3);
+    }
+
+    .badge-gem {
+      background: rgba(0, 112, 221, 0.2);
+      color: var(--quality-rare);
+      border: 1px solid rgba(0, 112, 221, 0.3);
+    }
+
+    /* ========== PROGRESS BAR ========== */
+    .progress-container {
+      margin: 20px 0;
+      display: none;
+    }
+
+    .progress-container.visible { display: block; }
+
+    .progress-bar-wrap {
+      height: 24px;
+      background: var(--bg-input);
+      border: 1px solid var(--gold-dark);
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #5a4a0a, #ffd100, #b8960a);
+      background-size: 200% 100%;
+      animation: shimmer 2s linear infinite;
+      border-radius: 12px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .progress-text {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ========== DPS RESULT ========== */
+    .dps-result {
+      text-align: center;
+      padding: 30px;
+      display: none;
+    }
+
+    .dps-result.visible { display: block; }
+
+    .dps-number {
+      font-family: var(--font-title);
+      font-size: 56px;
+      font-weight: 900;
+      color: var(--quality-uncommon);
+      text-shadow: 0 0 20px rgba(30, 255, 0, 0.4);
+      line-height: 1;
+    }
+
+    .dps-label {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ========== STAT WEIGHT BARS ========== */
+    .stat-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .stat-bar-label {
+      width: 100px;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .stat-bar-track {
+      flex: 1;
+      height: 22px;
+      background: var(--bg-input);
+      border: 1px solid var(--gold-dark);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .stat-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .stat-bar-value {
+      width: 50px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-light);
+      flex-shrink: 0;
+    }
+
+    /* ========== CHARACTER CARDS ========== */
+    .character-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .character-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #1a1510 0%, #14100b 100%);
+      border: 1px solid var(--gold-dark);
+      border-left: 4px solid var(--gold-border);
+      border-radius: 6px;
+      padding: 14px;
+      position: relative;
+      transition: border-color 0.15s ease;
+      cursor: pointer;
+    }
+
+    .character-card:hover { border-color: var(--gold-border); }
+    .character-card.selected { border-color: var(--gold); box-shadow: 0 0 12px rgba(255, 209, 0, 0.15); }
+
+    .character-card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: #000;
+      flex-shrink: 0;
+      border: 2px solid rgba(0,0,0,0.3);
+    }
+
+    .character-card-info { flex: 1; min-width: 0; }
+
+    .character-card-name {
+      font-family: var(--font-title);
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .character-card-detail {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .character-card-ilvl {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-top: 2px;
+    }
+
+    .character-card-delete {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      transition: all 0.15s ease;
+    }
+
+    .character-card-delete:hover {
+      color: var(--red);
+      background: rgba(196, 31, 59, 0.15);
+    }
+
+    /* ========== IMPORT SECTION ========== */
+    .import-buttons {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .import-panel {
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    .import-panel.active { display: block; }
+
+    .import-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-bottom: 10px;
+    }
+
+    /* ========== SERVER LIST ========== */
+    .server-list-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--gold-dark);
+      border-radius: 5px;
+      margin-bottom: 8px;
+    }
+
+    .server-list-item .server-dot { flex-shrink: 0; }
+
+    .server-list-name {
+      font-weight: 600;
+      color: var(--text-light);
+      flex: 1;
+    }
+
+    .server-list-url {
+      font-size: 12px;
+      color: var(--text-muted);
+      flex: 2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ========== BIS / ENCHANT / UPGRADE ITEMS ========== */
+    .bis-slot {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--gold-dark);
+      border-radius: 5px;
+      margin-bottom: 8px;
+      transition: border-color 0.15s ease;
+    }
+
+    .bis-slot:hover { border-color: var(--gold-border); }
+
+    .bis-slot-name {
+      width: 90px;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    .bis-item-name {
+      flex: 1;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .bis-item-ilvl {
+      font-size: 13px;
+      color: var(--text-muted);
+      width: 50px;
+      text-align: center;
+    }
+
+    .bis-item-source {
+      font-size: 12px;
+      color: var(--quality-rare);
+      width: 110px;
+    }
+
+    .bis-item-delta {
+      font-size: 13px;
+      font-weight: 700;
+      width: 80px;
+      text-align: right;
+    }
+
+    .delta-positive { color: var(--quality-uncommon); }
+    .delta-negative { color: var(--red); }
+
+    /* ========== ENCHANT/GEM RECS ========== */
+    .rec-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--gold-dark);
+      border-radius: 5px;
+      margin-bottom: 8px;
+    }
+
+    .rec-slot {
+      width: 90px;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    .rec-name {
+      flex: 1;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--quality-uncommon);
+    }
+
+    .rec-detail {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ========== FILTER BAR ========== */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--gold-dark);
+      border-radius: 4px;
+      background: var(--bg-card);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-btn:hover { border-color: var(--gold-border); color: var(--text); }
+
+    .filter-btn.active {
+      border-color: var(--gold);
+      color: var(--gold);
+      background: rgba(255, 209, 0, 0.07);
+    }
+
+    /* ========== MODAL ========== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: linear-gradient(180deg, #1a1510 0%, #0d0a07 100%);
+      border: 2px solid var(--gold-border);
+      border-radius: 8px;
+      width: 520px;
+      max-width: 95vw;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 209, 0, 0.08);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--gold-dark);
+    }
+
+    .modal-header h2 {
+      font-family: var(--font-title);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      transition: color 0.15s ease;
+    }
+
+    .modal-close:hover { color: var(--gold); }
+
+    .modal-body { padding: 20px; }
+
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      padding: 14px 20px;
+      border-top: 1px solid var(--gold-dark);
+    }
+
+    /* ========== STATUS INDICATOR ========== */
+    .status-msg {
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .status-msg.visible { display: block; }
+
+    .status-msg.success {
+      background: rgba(30, 255, 0, 0.08);
+      border: 1px solid rgba(30, 255, 0, 0.2);
+      color: var(--quality-uncommon);
+    }
+
+    .status-msg.error {
+      background: rgba(196, 31, 59, 0.08);
+      border: 1px solid rgba(196, 31, 59, 0.2);
+      color: #e88;
+    }
+
+    .status-msg.info {
+      background: rgba(0, 112, 221, 0.08);
+      border: 1px solid rgba(0, 112, 221, 0.2);
+      color: var(--quality-rare);
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .empty-state {
+      text-align: center;
+      padding: 50px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 14px;
+      opacity: 0.4;
+    }
+
+    .empty-state-text {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .empty-state-hint {
+      font-size: 12px;
+    }
+
+    /* ========== HISTORY TABLE ========== */
+    .sim-history { margin-top: 28px; }
+
+    /* ========== MISC ========== */
+    .flex-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mt-sm { margin-top: 8px; }
+    .mt-md { margin-top: 16px; }
+    .mt-lg { margin-top: 24px; }
+    .mb-md { margin-bottom: 16px; }
+    .mb-lg { margin-bottom: 24px; }
+
+    .text-gold { color: var(--gold); }
+    .text-muted { color: var(--text-muted); }
+    .text-uncommon { color: var(--quality-uncommon); }
+    .text-rare { color: var(--quality-rare); }
+    .text-epic { color: var(--quality-epic); }
+    .text-legendary { color: var(--quality-legendary); }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--gold-dark);
+      margin: 20px 0;
+    }
+
+    .inline-flex {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- ==================== SIDEBAR ==================== -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <h1>WoW<br>Optimizer</h1>
+      </div>
+
+      <div class="server-indicator">
+        <span class="server-dot" id="sidebarServerDot"></span>
+        <span id="sidebarServerName">Nessun server</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <!-- Server section -->
+        <div class="sidebar-section-label">Server</div>
+        <div class="nav-item" data-page="servers">
+          <span class="nav-icon">&#9741;</span>
+          <span>Servers</span>
+        </div>
+
+        <!-- Character section -->
+        <div class="sidebar-section-label">Personaggio</div>
+        <div class="nav-item active" data-page="characters">
+          <span class="nav-icon">&#9876;</span>
+          <span>Personaggi</span>
+        </div>
+        <div class="nav-item" data-page="dashboard">
+          <span class="nav-icon">&#9881;</span>
+          <span>Dashboard</span>
+        </div>
+
+        <!-- Simulation section -->
+        <div class="sidebar-section-label">Simulazione</div>
+        <div class="nav-item" data-page="simulate">
+          <span class="nav-icon">&#9889;</span>
+          <span>Simula DPS</span>
+        </div>
+        <div class="nav-item" data-page="statweights">
+          <span class="nav-icon">&#9878;</span>
+          <span>Stat Weights</span>
+        </div>
+
+        <!-- Optimization section -->
+        <div class="sidebar-section-label">Ottimizzazione</div>
+        <div class="nav-item" data-page="bis">
+          <span class="nav-icon">&#9733;</span>
+          <span>Gear BiS</span>
+        </div>
+        <div class="nav-item" data-page="enchants">
+          <span class="nav-icon">&#10024;</span>
+          <span>Enchants &amp; Gems</span>
+        </div>
+        <div class="nav-item" data-page="upgrades">
+          <span class="nav-icon">&#8679;</span>
+          <span>Upgrade Finder</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="nav-item" id="btnOpenSettings">
+          <span class="nav-icon">&#9881;</span>
+          <span>Settings</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ==================== CONTENT ==================== -->
+    <main class="content">
+
+      <!-- ===== PAGE: SERVERS ===== -->
+      <div class="page" id="page-servers">
+        <h2 class="page-title">Servers</h2>
+
+        <div id="serverList">
+          <!-- Server list items injected here -->
+        </div>
+
+        <div class="empty-state" id="serversEmpty">
+          <div class="empty-state-icon">&#9741;</div>
+          <div class="empty-state-text">Nessun server configurato</div>
+          <div class="empty-state-hint">Aggiungi un server optimizer per iniziare</div>
+        </div>
+
+        <hr class="divider">
+
+        <h3 class="page-subtitle">Aggiungi Server</h3>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="newServerName">Nome</label>
+              <input type="text" id="newServerName" placeholder="es. Locale">
+            </div>
+            <div class="form-group" style="flex:2">
+              <label for="newServerUrl">URL</label>
+              <input type="text" id="newServerUrl" placeholder="http://localhost:8080">
+            </div>
+            <div style="display:flex;gap:6px;align-items:flex-end;padding-bottom:1px;">
+              <button class="btn" id="btnTestServer">Test</button>
+              <button class="btn btn-primary" id="btnAddServer">Aggiungi</button>
+            </div>
+          </div>
+          <div class="status-msg" id="serverTestStatus"></div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: CHARACTERS ===== -->
+      <div class="page active" id="page-characters">
+        <h2 class="page-title">Personaggi</h2>
+
+        <!-- Import section -->
+        <div class="card">
+          <div class="card-header">Importa Personaggio</div>
+
+          <div class="import-buttons">
+            <button class="btn btn-primary" id="btnShowSimcImport">Import da SimC (/simc)</button>
+            <button class="btn" id="btnShowArmoryImport">Import da Armory (opzionale)</button>
+          </div>
+
+          <!-- SimC import panel -->
+          <div class="import-panel active" id="panelSimcImport">
+            <div class="import-note">Apri il gioco, digita /simc e incolla il risultato qui sotto.</div>
+            <div class="form-group">
+              <label for="simcInput">SimC String</label>
+              <textarea id="simcInput" rows="6" placeholder="Incolla qui l'output di /simc..."></textarea>
+            </div>
+            <button class="btn btn-primary" id="btnImportSimc">Importa</button>
+            <div class="status-msg" id="simcImportStatus"></div>
+          </div>
+
+          <!-- Armory import panel -->
+          <div class="import-panel" id="panelArmoryImport">
+            <div class="import-note">Richiede Blizzard API Key configurata nelle impostazioni. <span class="text-muted" id="armoryApiWarning" style="color:#e88;">(API Key non configurata)</span></div>
+            <div class="form-row mb-md">
+              <div class="form-group">
+                <label for="armoryName">Nome Personaggio</label>
+                <input type="text" id="armoryName" placeholder="es. Thrall">
+              </div>
+              <div class="form-group">
+                <label for="armoryRealm">Reame</label>
+                <select id="armoryRealm">
+                  <option value="">Seleziona reame...</option>
+                  <option value="bladefist">Bladefist</option>
+                  <option value="crushridge">Crushridge</option>
+                  <option value="draenor">Draenor</option>
+                  <option value="kazzak">Kazzak</option>
+                  <option value="nemesis">Nemesis</option>
+                  <option value="pozzo-delleternita">Pozzo dell'Eternita</option>
+                  <option value="ragnaros">Ragnaros</option>
+                  <option value="ravencrest">Ravencrest</option>
+                  <option value="silvermoon">Silvermoon</option>
+                  <option value="tarren-mill">Tarren Mill</option>
+                  <option value="twisting-nether">Twisting Nether</option>
+                  <option value="ysondre">Ysondre</option>
+                </select>
+              </div>
+              <div class="form-group" style="max-width:100px;">
+                <label for="armoryRegion">Regione</label>
+                <select id="armoryRegion">
+                  <option value="eu" selected>EU</option>
+                  <option value="us">US</option>
+                  <option value="kr">KR</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btnImportArmory">Importa da Armory</button>
+            <div class="status-msg" id="armoryImportStatus"></div>
+          </div>
+        </div>
+
+        <!-- Character list -->
+        <h3 class="page-subtitle">I tuoi personaggi</h3>
+        <div class="character-cards" id="characterList">
+          <!-- Character cards injected here -->
+        </div>
+
+        <div class="empty-state" id="charactersEmpty">
+          <div class="empty-state-icon">&#9876;</div>
+          <div class="empty-state-text">Nessun personaggio importato</div>
+          <div class="empty-state-hint">Usa il comando /simc nel gioco e incolla il risultato qui sopra</div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: DASHBOARD ===== -->
+      <div class="page" id="page-dashboard">
+        <h2 class="page-title">Dashboard</h2>
+
+        <div id="dashboardContent" style="display:none;">
+          <!-- Character header stats -->
+          <div class="stat-cards" id="dashStatCards">
+            <div class="stat-card">
+              <div class="stat-label">Nome</div>
+              <div class="stat-value" id="dashName">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Classe</div>
+              <div class="stat-value" id="dashClass">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Spec</div>
+              <div class="stat-value" id="dashSpec">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Razza</div>
+              <div class="stat-value" id="dashRace">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Livello</div>
+              <div class="stat-value" id="dashLevel">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">iLvl</div>
+              <div class="stat-value" id="dashIlvl">-</div>
+            </div>
+          </div>
+
+          <!-- Gear section -->
+          <h3 class="page-subtitle">Equipaggiamento</h3>
+          <div class="gear-grid" id="dashGearGrid">
+            <!-- Gear slots injected here -->
+          </div>
+        </div>
+
+        <div class="empty-state" id="dashboardEmpty">
+          <div class="empty-state-icon">&#9881;</div>
+          <div class="empty-state-text">Nessun personaggio selezionato</div>
+          <div class="empty-state-hint">Importa e seleziona un personaggio nella sezione Personaggi</div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: SIMULATE DPS ===== -->
+      <div class="page" id="page-simulate">
+        <h2 class="page-title">Simula DPS</h2>
+
+        <div id="simContent" style="display:none;">
+          <div style="display:flex;gap:14px;margin-bottom:20px;">
+            <button class="btn btn-green btn-lg" id="btnSimDps">&#9889; Simula DPS</button>
+            <button class="btn btn-primary btn-lg" id="btnSimStatWeights">&#9878; Calcola Stat Weights</button>
+          </div>
+
+          <!-- Progress -->
+          <div class="progress-container" id="simProgress">
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" id="simProgressBar"></div>
+            </div>
+            <div class="progress-text">
+              <span id="simProgressPercent">0%</span>
+              <span id="simProgressStatus">In attesa...</span>
+            </div>
+          </div>
+
+          <!-- DPS Result -->
+          <div class="dps-result" id="simResult">
+            <div class="dps-number" id="simDpsValue">0</div>
+            <div class="dps-label">DPS <span id="simDpsType"></span></div>
+            <div class="dps-label text-muted" id="simDpsDuration"></div>
+          </div>
+
+          <!-- Stat Weight Bars -->
+          <div id="simStatWeightBars" class="mt-lg" style="display:none;">
+            <h3 class="page-subtitle">Stat Weights</h3>
+            <div id="statWeightBarsContainer">
+              <!-- Bars injected here -->
+            </div>
+          </div>
+
+          <!-- History -->
+          <div class="sim-history">
+            <h3 class="page-subtitle">Cronologia Simulazioni</h3>
+            <table class="wow-table" id="simHistoryTable">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Personaggio</th>
+                  <th>Tipo</th>
+                  <th>DPS</th>
+                  <th>Durata</th>
+                </tr>
+              </thead>
+              <tbody id="simHistoryBody">
+              </tbody>
+            </table>
+            <div class="empty-state" id="simHistoryEmpty" style="padding:20px;">
+              <div class="empty-state-text text-muted">Nessuna simulazione effettuata</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty-state" id="simEmpty">
+          <div class="empty-state-icon">&#9889;</div>
+          <div class="empty-state-text">Nessun personaggio selezionato</div>
+          <div class="empty-state-hint">Seleziona un personaggio per avviare una simulazione</div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: STAT WEIGHTS ===== -->
+      <div class="page" id="page-statweights">
+        <h2 class="page-title">Stat Weights</h2>
+
+        <div id="swContent" style="display:none;">
+          <div id="swBarsContainer">
+            <!-- Stat weight bars injected here -->
+          </div>
+        </div>
+
+        <div class="empty-state" id="swEmpty">
+          <div class="empty-state-icon">&#9878;</div>
+          <div class="empty-state-text">Stat Weights non disponibili</div>
+          <div class="empty-state-hint">Esegui prima una simulazione Stat Weights dalla pagina Simula DPS</div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: GEAR BIS ===== -->
+      <div class="page" id="page-bis">
+        <h2 class="page-title">Gear BiS</h2>
+
+        <div id="bisContent" style="display:none;">
+          <div id="bisList">
+            <!-- BiS items injected here -->
+          </div>
+        </div>
+
+        <div class="empty-state" id="bisEmpty">
+          <div class="empty-state-icon">&#9733;</div>
+          <div class="empty-state-text">BiS non disponibile</div>
+          <div class="empty-state-hint">Calcola prima le Stat Weights per ottenere i suggerimenti BiS</div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: ENCHANTS & GEMS ===== -->
+      <div class="page" id="page-enchants">
+        <h2 class="page-title">Enchants &amp; Gems</h2>
+
+        <div id="enchantsContent" style="display:none;">
+          <h3 class="page-subtitle">Enchant Raccomandati</h3>
+          <div id="enchantRecList">
+            <!-- Enchant recs injected here -->
+          </div>
+
+          <h3 class="page-subtitle">Gemme Raccomandate</h3>
+          <div id="gemRecList">
+            <!-- Gem recs injected here -->
+          </div>
+        </div>
+
+        <div class="empty-state" id="enchantsEmpty">
+          <div class="empty-state-icon">&#10024;</div>
+          <div class="empty-state-text">Raccomandazioni non disponibili</div>
+          <div class="empty-state-hint">Calcola prima le Stat Weights per ottenere le raccomandazioni</div>
+        </div>
+      </div>
+
+      <!-- ===== PAGE: UPGRADE FINDER ===== -->
+      <div class="page" id="page-upgrades">
+        <h2 class="page-title">Upgrade Finder</h2>
+
+        <div id="upgradesContent" style="display:none;">
+          <div class="filter-bar" id="upgradeFilters">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="raid">Raid</button>
+            <button class="filter-btn" data-filter="mythic+">Mythic+</button>
+            <button class="filter-btn" data-filter="pvp">PvP</button>
+          </div>
+
+          <table class="wow-table" id="upgradeTable">
+            <thead>
+              <tr>
+                <th>Slot</th>
+                <th>Oggetto</th>
+                <th>iLvl</th>
+                <th>Fonte</th>
+                <th>Guadagno</th>
+              </tr>
+            </thead>
+            <tbody id="upgradeTableBody">
+              <!-- Upgrade rows injected here -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="empty-state" id="upgradesEmpty">
+          <div class="empty-state-icon">&#8679;</div>
+          <div class="empty-state-text">Upgrade Finder non disponibile</div>
+          <div class="empty-state-hint">Calcola prima le Stat Weights per cercare gli upgrade</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==================== SETTINGS MODAL ==================== -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="modal-close" id="btnCloseSettings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h3 class="page-subtitle" style="margin-top:0;">SimulationCraft</h3>
+        <div class="form-group">
+          <label for="settSimcPath">Percorso SimC</label>
+          <input type="text" id="settSimcPath" placeholder="C:\SimulationCraft\simc.exe">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="settSimcThreads">Threads</label>
+            <input type="number" id="settSimcThreads" value="4" min="1" max="32">
+          </div>
+          <div class="form-group">
+            <label for="settSimcIterations">Iterazioni</label>
+            <input type="number" id="settSimcIterations" value="10000" min="1000" max="100000" step="1000">
+          </div>
+        </div>
+        <button class="btn mt-sm" id="btnTestSimc">Test SimC</button>
+        <div class="status-msg" id="simcTestStatus"></div>
+
+        <hr class="divider">
+
+        <h3 class="page-subtitle" style="margin-top:0;">Blizzard API (opzionale)</h3>
+        <div class="import-note">Richiesto solo per l'importazione da Armory. Ottieni le chiavi su <span class="text-rare">develop.battle.net</span></div>
+        <div class="form-group">
+          <label for="settBlizzClientId">Client ID</label>
+          <input type="text" id="settBlizzClientId" placeholder="Il tuo Blizzard Client ID">
+        </div>
+        <div class="form-group">
+          <label for="settBlizzClientSecret">Client Secret</label>
+          <input type="password" id="settBlizzClientSecret" placeholder="Il tuo Blizzard Client Secret">
+        </div>
+        <div class="form-group" style="max-width:150px;">
+          <label for="settBlizzRegion">Regione</label>
+          <select id="settBlizzRegion">
+            <option value="eu" selected>EU</option>
+            <option value="us">US</option>
+            <option value="kr">KR</option>
+          </select>
+        </div>
+        <button class="btn mt-sm" id="btnTestBlizzard">Test Blizzard API</button>
+        <div class="status-msg" id="blizzTestStatus"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnCancelSettings">Annulla</button>
+        <button class="btn btn-primary" id="btnSaveSettings">Salva</button>
+      </div>
+      <div class="status-msg" id="settingsSaveStatus" style="margin:0 20px 14px;"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
