@@ -3,7 +3,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../modules/db');
-const { parseSimcString } = require('../modules/simc-parser');
+const { parseSimcString, generateSimcProfile } = require('../modules/simc-parser');
+const blizzard = require('../modules/blizzard-api');
 
 // POST /api/characters/import-simc
 // Import character from SimulationCraft addon string
@@ -227,6 +228,78 @@ router.put('/:id/simc', (req, res) => {
   } catch (err) {
     console.error('[character] Error updating character SimC:', err);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/characters/import-armory
+// Import character from Blizzard Armory API
+router.post('/import-armory', async (req, res) => {
+  try {
+    const { name, realm, region } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'name is required and must be a non-empty string' });
+    }
+
+    if (!realm || typeof realm !== 'string' || realm.trim().length === 0) {
+      return res.status(400).json({ error: 'realm is required and must be a non-empty string' });
+    }
+
+    // Fetch character from Blizzard API
+    let imported;
+    try {
+      imported = await blizzard.importCharacter(realm.trim(), name.trim(), region);
+    } catch (importErr) {
+      return res.status(502).json({ error: 'Blizzard API error: ' + importErr.message });
+    }
+
+    // Generate SimC profile string
+    let simcString = '';
+    try {
+      simcString = generateSimcProfile(imported);
+    } catch (simcErr) {
+      console.error('[character] Error generating SimC profile from armory import:', simcErr);
+      // Non-fatal: continue without SimC string
+    }
+
+    const charData = {
+      name: imported.name,
+      realm: imported.realm,
+      region: imported.region,
+      class: imported.class,
+      spec: imported.spec,
+      race: imported.race,
+      level: imported.level,
+      ilvl: imported.ilvl,
+      equipment: imported.equipment,
+      stats: imported.stats,
+      avatarUrl: imported.avatarUrl,
+      simc_string: simcString
+    };
+
+    let id;
+    try {
+      id = db.insertCharacter(charData);
+    } catch (dbErr) {
+      return res.status(500).json({ error: 'Failed to save character: ' + dbErr.message });
+    }
+
+    if (!id) {
+      return res.status(500).json({ error: 'Failed to save character to database' });
+    }
+
+    let character;
+    try {
+      character = db.getCharacter(id);
+    } catch (getErr) {
+      // Character was saved but we couldn't retrieve it; return what we can
+      return res.status(201).json({ id, ...charData });
+    }
+
+    return res.status(201).json(character);
+  } catch (err) {
+    console.error('[character] Error importing from armory:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 
