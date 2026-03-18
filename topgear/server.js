@@ -12,6 +12,54 @@ const REPORTS = '/reports';
 const TMP = '/tmp/topgear';
 try { fs.mkdirSync(TMP, { recursive: true }); } catch(e) {}
 
+const https = require('https');
+var blizzToken = null;
+var blizzTokenExpiry = 0;
+
+function getBlizzToken() {
+  return new Promise(function(ok) {
+    if (blizzToken && Date.now() < blizzTokenExpiry) return ok(blizzToken);
+    var r = https.request({ hostname: 'oauth.battle.net', path: '/token', method: 'POST',
+      headers: { Authorization: 'Basic ' + Buffer.from('7e62e4ac2af840e9b220f6b6da088b05:iNmhg9Dpg8qvulQDSnKDdwblSY7UYdcr').toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' }
+    }, function(s) { var d = ''; s.on('data', function(c) { d += c; }); s.on('end', function() { try { var j = JSON.parse(d); blizzToken = j.access_token; blizzTokenExpiry = Date.now() + (j.expires_in - 60) * 1000; ok(blizzToken); } catch(e) { ok(null); } }); });
+    r.write('grant_type=client_credentials'); r.end();
+  });
+}
+
+function checkItemBlizzard(itemId) {
+  return new Promise(function(ok) {
+    getBlizzToken().then(function(token) {
+      if (!token) return ok(null);
+      var r = https.request({ hostname: 'eu.api.blizzard.com', path: '/data/wow/item/' + itemId + '?namespace=static-eu', method: 'GET',
+        headers: { Authorization: 'Bearer ' + token }
+      }, function(s) { var d = ''; s.on('data', function(c) { d += c; }); s.on('end', function() { try { ok(JSON.parse(d)); } catch(e) { ok(null); } }); });
+      r.end();
+    });
+  });
+}
+
+// Item cache to avoid repeated API calls
+var itemCache = {};
+
+async function isItemValid(itemId) {
+  if (!itemId || itemId === '0') return true;
+  if (itemCache[itemId] !== undefined) return itemCache[itemId];
+  try {
+    var item = await checkItemBlizzard(itemId);
+    if (!item || !item.level) { itemCache[itemId] = true; return true; }
+    var valid = true;
+    // Block Artifact quality items (old legendaries/artifacts)
+    var qualityEN = item.quality && item.quality.en_US ? item.quality.en_US : '';
+    if (qualityEN === 'Artifact') { valid = false; console.log('[topgear] Blizzard API blocked Artifact: ' + (item.name?.en_US || itemId)); }
+    // Block items with Blizzard ilvl below 400
+    if (item.level < 400) { valid = false; console.log('[topgear] Blizzard API blocked low ilvl: ' + (item.name?.en_US || itemId) + ' ilvl=' + item.level); }
+    // Block items requiring level below 78 (pre-TWW)
+    if (item.required_level && item.required_level < 78) { valid = false; console.log('[topgear] Blizzard API blocked low req level: ' + (item.name?.en_US || itemId) + ' req=' + item.required_level); }
+    itemCache[itemId] = valid;
+    return valid;
+  } catch(e) { return true; }
+}
+
 const jobs = {};
 let jobCounter = 0;
 
@@ -191,7 +239,7 @@ function parseResults(jobId, jsonFile, htmlFile, inputFile, duration, itemMap) {
 }
 
 // POST /api/simulate
-app.post('/api/simulate', function(req, res) {
+app.post('/api/simulate', async function(req, res) {
   try {
     var simcText = req.body.simcProfile;
     if (!simcText) return res.status(400).json({ error: 'Missing simcProfile' });
@@ -199,6 +247,20 @@ app.post('/api/simulate', function(req, res) {
     // Parse profile and bag items
     var parsed = parseSimcBags(simcText);
     var bagItems = parsed.bagItems;
+
+    // Verify each bag item via Blizzard API
+    var validatedBags = [];
+    var blizzardBlocked = 0;
+    for (var bi = 0; bi < bagItems.length; bi++) {
+      var valid = await isItemValid(bagItems[bi].itemId);
+      if (valid) {
+        validatedBags.push(bagItems[bi]);
+      } else {
+        blizzardBlocked++;
+      }
+    }
+    bagItems = validatedBags;
+    parsed.skippedLowIlvl += blizzardBlocked;
 
     // Also accept manually added alternatives
     if (req.body.alternatives && req.body.alternatives.length > 0) {
