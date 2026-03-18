@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Trinket Comparison - WoW Optimizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0a07;--card:#1a1510;--border:#3d2e1a;--gold:#ffd100;--gold-dim:#c4a35a;--gold-dark:#8b7355;--text:#e8dcc8;--text-dim:#9e8e72;--green:#1eff00;--red:#ff3333;--epic:#a335ee}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.container{max-width:960px;margin:0 auto;padding:30px 20px}
+h1{font-family:'Cinzel',serif;color:var(--gold);font-size:28px;text-align:center;margin-bottom:6px;text-shadow:0 0 12px rgba(255,209,0,0.3)}
+.subtitle{text-align:center;color:var(--text-dim);font-size:13px;margin-bottom:24px}
+.nav{display:flex;justify-content:center;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+.nav a{color:var(--gold-dim);text-decoration:none;padding:8px 18px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-weight:600;transition:all .15s}
+.nav a:hover,.nav a.active{border-color:var(--gold);color:var(--gold);background:rgba(255,209,0,0.05)}
+.card{background:var(--card);border:1px solid var(--border);border-top:2px solid var(--gold-dark);border-radius:6px;padding:20px;margin-bottom:20px}
+.card-title{font-family:'Cinzel',serif;color:var(--gold);font-size:16px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+select{background:#15120d;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:8px 12px;font-size:13px;cursor:pointer;outline:none}
+select:focus{border-color:var(--gold-dark)}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:4px 0}
+.bar-row:hover{background:rgba(139,115,85,0.08);border-radius:4px}
+.bar-rank{width:30px;font-family:'Cinzel',serif;font-size:14px;font-weight:700;color:var(--gold-dark);text-align:center}
+.bar-row:first-child .bar-rank{color:var(--gold)}
+.bar-name{width:250px;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{flex:1;height:22px;background:#15120d;border:1px solid var(--border);border-radius:4px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:4px;transition:width .5s;background:linear-gradient(90deg,var(--gold-dark),var(--gold))}
+.bar-row:first-child .bar-fill{background:linear-gradient(90deg,#1a6a2a,var(--green))}
+.bar-dps{width:80px;font-size:13px;font-weight:700;text-align:right;color:var(--gold)}
+.bar-row:first-child .bar-dps{color:var(--green)}
+.bar-delta{width:70px;font-size:11px;text-align:right;color:var(--text-dim)}
+.loading{text-align:center;padding:40px;color:var(--text-dim);font-size:14px}
+.controls{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.controls label{color:var(--text-dim);font-size:12px;font-weight:600}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--gold-dark);border-radius:4px}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Trinket Comparison</h1>
+  <div class="subtitle">Confronto trinket automatico con bloodytools + SimC</div>
+  <div class="nav">
+    <a href="/">Top Gear</a>
+    <a href="/sim.html">SimC Web</a>
+    <a href="/trinkets.html" class="active">Trinkets</a>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Seleziona Classe e Spec</div>
+    <div class="controls">
+      <label>Classe/Spec:</label>
+      <select id="specSelect" onchange="loadData()">
+        <option value="shaman_enhancement">Enhancement Shaman</option>
+      </select>
+      <label>Fight Style:</label>
+      <select id="fightSelect" onchange="loadData()">
+        <option value="patchwerk">Patchwerk</option>
+      </select>
+      <span id="statusLabel" style="color:var(--text-dim);font-size:12px;margin-left:auto"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" id="chartTitle">Trinket Ranking</div>
+    <div id="chartContainer">
+      <div class="loading">Caricamento dati...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function loadData() {
+  var spec = document.getElementById('specSelect').value;
+  var fight = document.getElementById('fightSelect').value;
+  var file = '/reports/' + spec + '_' + fight + '.json';
+
+  document.getElementById('statusLabel').textContent = 'Caricamento...';
+  document.getElementById('chartContainer').innerHTML = '<div class="loading">Caricamento dati...</div>';
+
+  fetch(file).then(function(r) {
+    if (!r.ok) throw new Error('File non trovato: ' + file);
+    return r.json();
+  }).then(function(data) {
+    renderChart(data);
+    document.getElementById('statusLabel').textContent = Object.keys(data.data).length + ' trinket simulati';
+  }).catch(function(e) {
+    document.getElementById('chartContainer').innerHTML = '<div class="loading" style="color:var(--red)">Errore: ' + e.message + '<br><br>Lancia la simulazione con bloodytools sul container:<br><code style="color:var(--gold);font-size:11px">python -m bloodytools --executable /opt/simc/build/simc -s trinkets,' + spec.replace('_',',') + ',' + fight + ' --threads 12</code></div>';
+    document.getElementById('statusLabel').textContent = 'Errore';
+  });
+}
+
+function renderChart(data) {
+  var title = data.title || 'Trinket Ranking';
+  document.getElementById('chartTitle').textContent = title;
+
+  // Find max ilvl for each trinket and collect
+  var items = [];
+  Object.keys(data.data).forEach(function(name) {
+    var vals = data.data[name];
+    var ilvls = Object.keys(vals).sort(function(a, b) { return parseInt(b) - parseInt(a); });
+    var maxIlvl = ilvls[0];
+    items.push({ name: name, dps: vals[maxIlvl], ilvl: maxIlvl });
+  });
+  items.sort(function(a, b) { return b.dps - a.dps; });
+
+  var maxDps = items[0].dps;
+  var minDps = items[items.length - 1].dps;
+  var baseDps = data.data.baseline ? Object.values(data.data.baseline)[0] : minDps;
+
+  var html = '';
+  items.forEach(function(t, i) {
+    var pct = maxDps > minDps ? ((t.dps - minDps) / (maxDps - minDps) * 100) : 100;
+    pct = Math.max(5, pct);
+    var delta = Math.round(t.dps - items[0].dps);
+    var deltaText = delta === 0 ? 'BEST' : delta.toLocaleString();
+    var deltaColor = delta === 0 ? 'color:var(--green)' : 'color:var(--red)';
+
+    html += '<div class="bar-row">'
+      + '<div class="bar-rank">' + (i + 1) + '</div>'
+      + '<div class="bar-name" title="' + esc(t.name) + ' (ilvl ' + t.ilvl + ')">' + esc(t.name) + '</div>'
+      + '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<div class="bar-dps">' + Math.round(t.dps).toLocaleString() + '</div>'
+      + '<div class="bar-delta" style="' + deltaColor + '">' + deltaText + '</div>'
+      + '</div>';
+  });
+
+  document.getElementById('chartContainer').innerHTML = html;
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// Load on start
+loadData();
+
+// Also check which specs have data
+fetch('/reports/').then(function(r) { return r.text(); }).then(function(html) {
+  var matches = html.match(/\w+_\w+_patchwerk\.json/g) || [];
+  if (matches.length > 1) {
+    var sel = document.getElementById('specSelect');
+    sel.innerHTML = '';
+    matches.forEach(function(f) {
+      var spec = f.replace('_patchwerk.json', '');
+      var label = spec.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      var opt = document.createElement('option');
+      opt.value = spec;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+  }
+}).catch(function() {});
+</script>
+</body>
+</html>

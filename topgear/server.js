@@ -572,6 +572,83 @@ app.get('/api/jobs/:id', function(req, res) {
   });
 });
 
+// ═══ BLOODYTOOLS API ═══
+var bloodyJobs = {};
+var bloodyCount = 0;
+
+// GET /api/bloody/specs - List available specs from SimC profiles
+app.get('/api/bloody/specs', function(req, res) {
+  try {
+    var profileDir = '/opt/simc/profiles/MID1';
+    var files = fs.readdirSync(profileDir).filter(function(f) { return f.endsWith('.simc'); });
+    var specs = files.map(function(f) {
+      var parts = f.replace('MID1_', '').replace('.simc', '').split('_');
+      var cls = parts[0].toLowerCase();
+      var spec = parts.slice(1).join('_').toLowerCase();
+      return { class: cls, spec: spec, file: f, label: parts.join(' ') };
+    });
+    res.json(specs);
+  } catch(e) { res.json([]); }
+});
+
+// POST /api/bloody/run - Launch a bloodytools simulation
+app.post('/api/bloody/run', function(req, res) {
+  try {
+    var simType = req.body.type || 'trinkets';
+    var cls = req.body.class || 'shaman';
+    var spec = req.body.spec || 'enhancement';
+    var fight = req.body.fight || 'patchwerk';
+
+    var validTypes = ['trinkets', 'races', 'talents', 'talent_addition', 'talent_removal', 'secondary_distributions', 'tier_set', 'weapon_enchantments'];
+    if (validTypes.indexOf(simType) === -1) return res.status(400).json({ error: 'Invalid type. Valid: ' + validTypes.join(', ') });
+
+    var jobId = ++bloodyCount;
+    bloodyJobs[jobId] = { status: 'running', output: '', error: null, startTime: Date.now() };
+
+    var args = ['-m', 'bloodytools', '--executable', '/opt/simc/build/simc', '-s', simType + ',' + cls + ',' + spec + ',' + fight, '--threads', '12', '--target_error', '1', '--pretty'];
+    var proc = spawn('/opt/sim_free_venv/bin/python', args, { cwd: '/opt/bloodytools' });
+
+    proc.stdout.on('data', function(data) { bloodyJobs[jobId].output += data.toString(); });
+    proc.stderr.on('data', function(data) { bloodyJobs[jobId].output += data.toString(); });
+
+    proc.on('close', function(code) {
+      bloodyJobs[jobId].duration = (Date.now() - bloodyJobs[jobId].startTime) / 1000;
+      if (code !== 0) {
+        bloodyJobs[jobId].status = 'error';
+        bloodyJobs[jobId].error = 'Exit code ' + code;
+      } else {
+        bloodyJobs[jobId].status = 'done';
+        // Copy result to reports dir
+        var resultFile = '/opt/bloodytools/results/' + simType + '/' + cls + '_' + spec + '_' + fight + '.json';
+        var destFile = '/reports/' + cls + '_' + spec + '_' + fight + '_' + simType + '.json';
+        try { fs.copyFileSync(resultFile, destFile); bloodyJobs[jobId].resultUrl = '/reports/' + path.basename(destFile); } catch(e) {}
+      }
+    });
+
+    proc.on('error', function(err) {
+      bloodyJobs[jobId].status = 'error';
+      bloodyJobs[jobId].error = err.message;
+    });
+
+    res.json({ jobId: jobId });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/bloody/status/:id
+app.get('/api/bloody/status/:id', function(req, res) {
+  var job = bloodyJobs[req.params.id];
+  if (!job) return res.status(404).json({ error: 'Not found' });
+  res.json({ status: job.status, duration: job.duration, error: job.error, resultUrl: job.resultUrl, outputLines: job.output.split('\n').length });
+});
+
+// GET /api/bloody/results - List available result files
+app.get('/api/bloody/results', function(req, res) {
+  try {
+    var files = fs.readdirSync(REPORTS).filter(function(f) { return f.match(/_trinkets\.json$|_races\.json$|_talents\.json$|_secondary_distributions\.json$|_weapon_enchantments\.json$/); });
+    res.json(files.map(function(f) { return { file: f, url: '/reports/' + f }; }));
+  } catch(e) { res.json([]); }
+});
+
 app.listen(80, '0.0.0.0', function() {
   console.log('WoW Optimizer server on port 80');
 });
