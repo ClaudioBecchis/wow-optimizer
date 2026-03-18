@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Top Gear - WoW Optimizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0a07;--card:#1a1510;--border:#3d2e1a;--gold:#ffd100;--gold-dim:#c4a35a;--gold-dark:#8b7355;--text:#e8dcc8;--text-dim:#9e8e72;--green:#1eff00;--red:#ff3333;--epic:#a335ee;--rare:#0070dd}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.container{max-width:900px;margin:0 auto;padding:30px 20px}
+h1{font-family:'Cinzel',serif;color:var(--gold);font-size:28px;text-align:center;margin-bottom:8px;text-shadow:0 0 12px rgba(255,209,0,0.3)}
+.subtitle{text-align:center;color:var(--text-dim);font-size:13px;margin-bottom:30px}
+.card{background:var(--card);border:1px solid var(--border);border-top:2px solid var(--gold-dark);border-radius:6px;padding:20px;margin-bottom:20px}
+.card-title{font-family:'Cinzel',serif;color:var(--gold);font-size:16px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+textarea{width:100%;background:#15120d;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:10px;font-family:Consolas,monospace;font-size:12px;resize:vertical}
+textarea:focus{border-color:var(--gold-dark);outline:none}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:12px 28px;font-size:16px;font-weight:700;font-family:'Cinzel',serif;border:1px solid var(--gold-dark);border-radius:4px;cursor:pointer;transition:all .2s}
+.btn-green{background:linear-gradient(180deg,#1a4a2a,#082a10);color:var(--green);border-color:#2d7a4a}
+.btn-green:hover{box-shadow:0 0 14px rgba(30,255,0,0.2)}
+.btn-green:disabled{opacity:0.5;cursor:not-allowed}
+.progress-wrap{height:24px;background:#15120d;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:16px 0;display:none}
+.progress-fill{height:100%;background:linear-gradient(90deg,#5a4a0a,#ffd100,#b8960a);background-size:200% 100%;animation:shimmer 2s linear infinite;border-radius:12px;transition:width .4s;width:0}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.progress-text{display:none;justify-content:space-between;font-size:12px;color:var(--text-dim);margin-top:6px}
+.result-item{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:5px;margin-bottom:8px}
+.result-item.best{border-color:var(--gold);background:linear-gradient(135deg,#1e1810,#14100b);box-shadow:0 0 10px rgba(255,209,0,0.1)}
+.result-item.worse{opacity:0.6}
+.result-rank{width:36px;font-family:'Cinzel',serif;font-size:18px;font-weight:700;color:var(--gold-dark);text-align:center}
+.result-item.best .result-rank{color:var(--gold);font-size:22px}
+.result-name{flex:1;font-weight:600;font-size:14px}
+.result-verdict{font-size:11px;font-weight:700;padding:3px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:0.5px}
+.verdict-equip{background:rgba(30,255,0,0.15);color:var(--green);border:1px solid rgba(30,255,0,0.3)}
+.verdict-keep{background:rgba(255,209,0,0.1);color:var(--gold);border:1px solid rgba(255,209,0,0.2)}
+.verdict-discard{background:rgba(255,51,51,0.1);color:var(--red);border:1px solid rgba(255,51,51,0.2)}
+.result-dps{font-family:'Cinzel',serif;font-size:16px;font-weight:700;width:100px;text-align:right;color:var(--green)}
+.result-delta{width:110px;text-align:right;font-weight:700;font-size:13px}
+.delta-pos{color:var(--green)}.delta-neg{color:var(--red)}.delta-zero{color:var(--gold)}
+.info-box{font-size:12px;color:var(--text-dim);padding:10px;background:#15120d;border:1px solid var(--border);border-radius:4px;margin-bottom:14px}
+.pawn-box{margin-top:16px;padding:12px;background:#15120d;border:1px solid var(--gold-dark);border-radius:4px}
+.pawn-box .label{font-family:'Cinzel',serif;color:var(--gold-dim);font-size:12px;margin-bottom:6px}
+.pawn-box input{width:100%;background:#0d0a07;color:var(--gold);border:1px solid var(--border);border-radius:3px;padding:8px;font-family:Consolas,monospace;font-size:11px}
+.pawn-box button{margin-top:6px;padding:5px 14px;font-size:12px;background:linear-gradient(180deg,#3a2e1e,#1e1810);color:var(--gold-dim);border:1px solid var(--gold-dark);border-radius:3px;cursor:pointer}
+.report-link{text-align:center;margin-top:16px;font-size:13px}
+.report-link a{color:var(--gold);text-decoration:none;font-weight:600}
+.report-link a:hover{text-decoration:underline}
+.hidden{display:none}
+.bag-count{font-size:13px;color:var(--gold-dim);margin-top:8px}
+.status-error{font-size:12px;color:#e88;margin-top:8px}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--gold-dark);border-radius:4px}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Top Gear</h1>
+  <div class="subtitle">Incolla /simc e scopri cosa indossare e cosa buttare</div>
+
+  <div class="card">
+    <div class="card-title">Incolla qui il tuo /simc</div>
+    <div class="info-box">
+      In WoW scrivi <strong>/simc</strong> in chat. L'addon esporta il tuo personaggio CON gli oggetti della borsa.
+      Copia tutto e incolla qui sotto. L'app trova automaticamente gli oggetti alternativi e li confronta.
+    </div>
+    <textarea id="profileInput" rows="12" placeholder="Incolla qui TUTTA la stringa /simc..."></textarea>
+    <div id="bagCount" class="bag-count hidden"></div>
+  </div>
+
+  <div class="card" style="text-align:center">
+    <button class="btn btn-green" id="btnSim" onclick="startSim()">Simula Top Gear</button>
+    <div id="errorMsg" class="status-error hidden"></div>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-fill" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">
+      <span id="progressPct">0%</span>
+      <span id="progressLabel">In attesa...</span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="resultsCard">
+    <div class="card-title" id="resultsTitle">Risultati</div>
+    <div id="resultsList"></div>
+    <div id="pawnBox" class="pawn-box hidden">
+      <div class="label">Pawn Import String</div>
+      <input type="text" id="pawnString" readonly onclick="this.select()">
+      <button onclick="navigator.clipboard.writeText(document.getElementById('pawnString').value).then(function(){alert('Pawn string copiata!')})">Copia Pawn String</button>
+    </div>
+    <div class="report-link" id="reportLink"></div>
+  </div>
+</div>
+
+<script>
+var pollTimer = null;
+
+function startSim() {
+  var text = document.getElementById('profileInput').value.trim();
+  if (!text) { showError('Incolla prima la stringa /simc'); return; }
+
+  document.getElementById('btnSim').disabled = true;
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('progressText').style.display = 'flex';
+  document.getElementById('resultsCard').classList.add('hidden');
+  document.getElementById('progressBar').style.width = '5%';
+  document.getElementById('progressPct').textContent = '0%';
+  document.getElementById('progressLabel').textContent = 'Invio a SimC...';
+  hideError();
+
+  fetch('/api/simulate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ simcProfile: text })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) { showError(data.error); document.getElementById('btnSim').disabled = false; return; }
+    document.getElementById('bagCount').textContent = data.bagItems + ' oggetti dalla borsa trovati';
+    document.getElementById('bagCount').classList.remove('hidden');
+    pollJob(data.jobId);
+  }).catch(function(e) {
+    showError(e.message);
+    document.getElementById('btnSim').disabled = false;
+  });
+}
+
+function pollJob(jobId) {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(function() {
+    fetch('/api/status/' + jobId).then(function(r) { return r.json(); }).then(function(job) {
+      document.getElementById('progressBar').style.width = (job.progress || 0) + '%';
+      document.getElementById('progressPct').textContent = (job.progress || 0) + '%';
+      document.getElementById('progressLabel').textContent = job.status === 'running' ? 'SimC sta simulando ' + (job.bagItemCount || 0) + ' combinazioni...' : job.status;
+
+      if (job.status === 'done' || job.status === 'error') {
+        clearInterval(pollTimer);
+        document.getElementById('btnSim').disabled = false;
+        document.getElementById('progressBar').style.width = '100%';
+        if (job.status === 'error') { showError(job.error); return; }
+        showResults(job);
+      }
+    }).catch(function() {});
+  }, 2000);
+}
+
+function showResults(job) {
+  document.getElementById('resultsCard').classList.remove('hidden');
+  document.getElementById('resultsTitle').textContent = 'Risultati - DPS Base: ' + job.dps.toLocaleString();
+  var html = '';
+  var bestDps = job.results[0].dps;
+
+  job.results.forEach(function(r, i) {
+    var cls = i === 0 ? 'best' : (r.delta < 0 ? 'worse' : '');
+    var deltaText, deltaClass, verdict, verdictClass;
+
+    if (i === 0) {
+      deltaText = 'MIGLIORE';
+      deltaClass = 'delta-zero';
+      verdict = 'INDOSSA';
+      verdictClass = 'verdict-equip';
+    } else if (r.delta >= 0) {
+      deltaText = '+' + r.delta.toLocaleString() + ' (' + r.pct + '%)';
+      deltaClass = 'delta-pos';
+      verdict = 'TIENI';
+      verdictClass = 'verdict-keep';
+    } else {
+      deltaText = r.delta.toLocaleString() + ' (' + r.pct + '%)';
+      deltaClass = 'delta-neg';
+      verdict = r.delta < -500 ? 'BUTTA' : 'DISINCANTA';
+      verdictClass = 'verdict-discard';
+    }
+
+    html += '<div class="result-item ' + cls + '">'
+      + '<div class="result-rank">#' + (i + 1) + '</div>'
+      + '<div class="result-name">' + esc(r.name) + '</div>'
+      + '<span class="result-verdict ' + verdictClass + '">' + verdict + '</span>'
+      + '<div class="result-dps">' + r.dps.toLocaleString() + '</div>'
+      + '<div class="result-delta ' + deltaClass + '">' + deltaText + '</div>'
+      + '</div>';
+  });
+
+  // Show skipped items
+  if (job.skippedItems && job.skippedItems.length > 0) {
+    html += '<div style="margin-top:12px;padding:10px;background:#15120d;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text-dim)">';
+    html += '<strong style="color:var(--gold-dim)">Oggetti incompatibili saltati:</strong> ' + job.skippedItems.map(esc).join(', ');
+    html += '</div>';
+  }
+
+  document.getElementById('resultsList').innerHTML = html;
+
+  // Pawn
+  if (job.pawn) {
+    document.getElementById('pawnBox').classList.remove('hidden');
+    document.getElementById('pawnString').value = job.pawn;
+  }
+
+  // Report
+  if (job.htmlReport) {
+    document.getElementById('reportLink').innerHTML = '<a href="' + job.htmlReport + '" target="_blank">Apri Report SimC Completo</a> | Durata: ' + (job.duration ? job.duration.toFixed(1) + 's' : '?');
+  }
+}
+
+function showError(msg) {
+  var el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+function hideError() { document.getElementById('errorMsg').classList.add('hidden'); }
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+</body>
+</html>

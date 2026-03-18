@@ -1,0 +1,13 @@
+[Unit]
+Description=Top Gear WoW Optimizer
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/topgear
+ExecStart=/bin/node server.js
+Restart=always
+RestartSec=3
+Environment=PATH=/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
