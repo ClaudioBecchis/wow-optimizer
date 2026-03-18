@@ -59,11 +59,20 @@ let tokenExpiresAt = 0;
 function slugify(text) {
   return text
     .toLowerCase()
-    .replace(/[''‛'"`]/g, '')          // remove apostrophes and quotes
+    .replace(/[''‛'"`]/g, '')          // remove apostrophes and quotes (WITHOUT inserting dash)
     .replace(/\s+/g, '-')             // spaces → dashes
     .replace(/[^a-z0-9\u00C0-\u024F\u1E00-\u1EFF-]/g, '') // keep a-z, 0-9, dash, accented chars
     .replace(/-{2,}/g, '-')           // collapse multiple dashes
     .replace(/^-+|-+$/g, '');         // trim leading/trailing dashes
+}
+
+/**
+ * Returns true if the string already looks like a slug:
+ * all lowercase, no spaces, may contain dashes and accented chars.
+ */
+function isAlreadySlug(text) {
+  // A slug has no uppercase letters and no spaces
+  return text === text.toLowerCase() && !/\s/.test(text);
 }
 
 /**
@@ -239,7 +248,7 @@ function parseEquipmentItem(item) {
 async function importCharacter(realm, name, region) {
   try {
     const effectiveRegion = (region || db.getConfig('blizzard_region') || 'eu').toLowerCase();
-    const realmSlug = slugify(realm);
+    const realmSlug = isAlreadySlug(realm) ? realm : slugify(realm);
     const charName = slugify(name);
     const profileNs = `profile-${effectiveRegion}`;
     const basePath = `/profile/wow/character/${encodeURIComponent(realmSlug)}/${encodeURIComponent(charName)}`;
