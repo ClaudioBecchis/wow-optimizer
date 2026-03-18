@@ -76,6 +76,7 @@ var REALMS = [
 var currentChar = null;
 var currentPage = 'characters';
 var pollTimers = [];
+var activeSimJobId = null;
 
 // --------------------------------------------------------------------------
 // Server Management
@@ -380,6 +381,67 @@ function clearPollTimers() {
     pollTimers = [];
   } catch (e) {
     console.error('clearPollTimers: failed', e);
+  }
+}
+
+async function cancelSim(jobId) {
+  try {
+    var id = jobId || activeSimJobId;
+    if (!id) {
+      showToast('No simulation to cancel.', 'warning');
+      return;
+    }
+
+    var result = await apiFetch('/simulate/cancel/' + encodeURIComponent(id), 'DELETE');
+
+    if (result.error && !result.ok) {
+      showToast('Failed to cancel: ' + (result.error || result.message), 'error');
+      return;
+    }
+
+    clearPollTimers();
+    activeSimJobId = null;
+
+    var statusEl = document.getElementById('sim-status');
+    if (statusEl) {
+      statusEl.innerHTML =
+        '<div style="padding:12px;background:#2c2c1a;border-radius:6px;color:#f39c12;">'
+        + 'Simulazione annullata</div>';
+    }
+
+    showToast('Simulazione annullata.', 'info');
+    loadSimHistory();
+  } catch (e) {
+    console.error('cancelSim: failed', e);
+    showToast('Error cancelling simulation.', 'error');
+  }
+}
+
+async function cancelAllSims() {
+  try {
+    var result = await apiFetch('/simulate/cancel-all', 'DELETE');
+
+    if (result.error && !result.ok) {
+      showToast('Failed to cancel: ' + (result.error || result.message), 'error');
+      return;
+    }
+
+    clearPollTimers();
+    activeSimJobId = null;
+
+    var statusEl = document.getElementById('sim-status');
+    if (statusEl) {
+      statusEl.innerHTML =
+        '<div style="padding:12px;background:#2c2c1a;border-radius:6px;color:#f39c12;">'
+        + 'Simulazione annullata</div>';
+    }
+
+    var cancelled = result.cancelled || 0;
+    showToast('Annullate ' + cancelled + ' simulazioni.', 'info');
+    loadSimHistory();
+  } catch (e) {
+    console.error('cancelAllSims: failed', e);
+    showToast('Error cancelling simulations.', 'error');
   }
 }
 
@@ -1032,6 +1094,7 @@ function renderSimPage() {
       + '<div class="sim-actions" style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">'
       + '<button class="btn btn-primary" onclick="runSim(\'dps\')">Run DPS Sim</button>'
       + '<button class="btn btn-secondary" onclick="runSim(\'stat-weights\')">Calculate Stat Weights</button>'
+      + '<button class="btn btn-danger" onclick="cancelAllSims()">Annulla Tutto</button>'
       + '</div>'
       + '<div id="sim-status" style="margin-bottom:16px;"></div>'
       + '<div id="sim-result"></div>'
@@ -1086,10 +1149,13 @@ async function runSim(type) {
     var jobId = result.jobId || result.job_id || result.id;
 
     if (jobId) {
+      activeSimJobId = jobId;
       if (statusEl) {
         statusEl.innerHTML =
-          '<div style="padding:12px;background:#1a1a2e;border-radius:6px;color:#f39c12;">'
-          + 'Simulation running (Job: ' + escapeHtml(String(jobId)) + ')... <span class="spinner"></span>'
+          '<div style="padding:12px;background:#1a1a2e;border-radius:6px;color:#f39c12;display:flex;align-items:center;gap:12px;">'
+          + '<span>Simulation running (Job: ' + escapeHtml(String(jobId)) + ')... <span class="spinner"></span></span>'
+          + '<button class="btn btn-sm btn-danger" onclick="cancelSim(\'' + escapeHtml(String(jobId)) + '\')" '
+          + 'style="margin-left:auto;">Annulla</button>'
           + '</div>';
       }
       pollSimStatus(jobId, type);
@@ -1134,6 +1200,7 @@ function pollSimStatus(jobId, type) {
 
         if (status === 'complete' || status === 'done' || status === 'completed' || status === 'finished') {
           clearInterval(timer);
+          activeSimJobId = null;
           if (statusEl) {
             statusEl.innerHTML =
               '<div style="padding:12px;background:#1a2e1a;border-radius:6px;color:#2ecc71;">'
@@ -1141,12 +1208,22 @@ function pollSimStatus(jobId, type) {
           }
           renderSimResult(result.result || result, type);
           loadSimHistory();
+        } else if (status === 'cancelled') {
+          clearInterval(timer);
+          activeSimJobId = null;
+          if (statusEl) {
+            statusEl.innerHTML =
+              '<div style="padding:12px;background:#2c2c1a;border-radius:6px;color:#f39c12;">'
+              + 'Simulazione annullata</div>';
+          }
+          loadSimHistory();
         } else if (status === 'failed' || status === 'error') {
           clearInterval(timer);
+          activeSimJobId = null;
           if (statusEl) {
             statusEl.innerHTML =
               '<div style="padding:12px;background:#2c1a1a;border-radius:6px;color:#e74c3c;">'
-              + 'Simulation failed: ' + escapeHtml(result.error || result.message || 'Unknown error')
+              + 'Simulation failed: ' + escapeHtml(result.error || result.error_message || result.message || 'Unknown error')
               + '</div>';
           }
         } else {
@@ -1154,10 +1231,13 @@ function pollSimStatus(jobId, type) {
           var progress = result.progress || '';
           if (statusEl) {
             statusEl.innerHTML =
-              '<div style="padding:12px;background:#1a1a2e;border-radius:6px;color:#f39c12;">'
-              + 'Simulation running... '
-              + (progress ? '(' + escapeHtml(String(progress)) + ') ' : '')
-              + '<span class="spinner"></span></div>';
+              '<div style="padding:12px;background:#1a1a2e;border-radius:6px;color:#f39c12;display:flex;align-items:center;gap:12px;">'
+              + '<span>Simulation running... '
+              + (progress ? '(' + escapeHtml(String(progress)) + '%) ' : '')
+              + '<span class="spinner"></span></span>'
+              + '<button class="btn btn-sm btn-danger" onclick="cancelSim(\'' + escapeHtml(String(jobId)) + '\')" '
+              + 'style="margin-left:auto;">Annulla</button>'
+              + '</div>';
           }
         }
       } catch (pollErr) {
@@ -1540,6 +1620,7 @@ async function loadSimHistory() {
       + '<th style="text-align:left;padding:8px;">Type</th>'
       + '<th style="text-align:right;padding:8px;">DPS</th>'
       + '<th style="text-align:right;padding:8px;">Status</th>'
+      + '<th style="text-align:right;padding:8px;">Actions</th>'
       + '</tr></thead><tbody>';
 
     history.forEach(function (entry) {
@@ -1551,6 +1632,16 @@ async function loadSimHistory() {
         var simType = entry.type || entry.simType || 'dps';
         var dps = entry.dps || entry.result_dps || '-';
         var status = entry.status || 'done';
+        var entryId = entry.id || entry._id || '';
+
+        var statusColor = '#f39c12';
+        if (status === 'done' || status === 'completed' || status === 'complete') {
+          statusColor = '#2ecc71';
+        } else if (status === 'error' || status === 'failed') {
+          statusColor = '#e74c3c';
+        } else if (status === 'cancelled') {
+          statusColor = '#888';
+        }
 
         html += '<tr style="border-bottom:1px solid #222;">'
           + '<td style="padding:8px;">' + escapeHtml(String(date)) + '</td>'
@@ -1558,9 +1649,16 @@ async function loadSimHistory() {
           + '<td style="padding:8px;text-align:right;font-weight:bold;">'
           + (dps !== '-' ? fmt(dps) : '-') + '</td>'
           + '<td style="padding:8px;text-align:right;">'
-          + '<span style="color:' + (status === 'done' || status === 'completed' || status === 'complete' ? '#2ecc71' : '#f39c12') + ';">'
+          + '<span style="color:' + statusColor + ';">'
           + escapeHtml(status) + '</span></td>'
-          + '</tr>';
+          + '<td style="padding:8px;text-align:right;">';
+
+        if (status === 'queued' || status === 'running') {
+          html += '<button class="btn btn-sm btn-danger" onclick="cancelSim(\''
+            + escapeHtml(String(entryId)) + '\')">Annulla</button>';
+        }
+
+        html += '</td></tr>';
       } catch (_) { /* ignore */ }
     });
 

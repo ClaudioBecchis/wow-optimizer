@@ -321,4 +321,50 @@ router.post('/test-simc', async (req, res) => {
   }
 });
 
+// DELETE /api/simulate/cancel/:jobId
+// Cancel a single simulation (queued or running)
+router.delete('/cancel/:jobId', (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    if (!jobId || isNaN(Number(jobId))) {
+      return res.status(400).json({ error: 'Invalid job ID' });
+    }
+
+    let result;
+    try {
+      result = simcRunner.cancelSimulation(jobId);
+    } catch (cancelErr) {
+      return res.status(500).json({ error: 'Failed to cancel simulation: ' + cancelErr.message });
+    }
+
+    if (result.ok) {
+      return res.json(result);
+    } else {
+      return res.status(404).json(result);
+    }
+  } catch (err) {
+    console.error('[simulate] Error cancelling simulation:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/simulate/cancel-all
+// Cancel all queued and running simulations
+router.delete('/cancel-all', (req, res) => {
+  try {
+    let result;
+    try {
+      result = simcRunner.cancelAll();
+    } catch (cancelErr) {
+      return res.status(500).json({ error: 'Failed to cancel simulations: ' + cancelErr.message });
+    }
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[simulate] Error cancelling all simulations:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

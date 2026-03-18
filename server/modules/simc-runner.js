@@ -9,6 +9,8 @@ const db = require('./db');
 
 const queue = [];
 let isRunning = false;
+let currentProcess = null;
+let currentJobId = null;
 
 const TMP_DIR = '/tmp/wow-optimizer';
 const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
@@ -261,6 +263,10 @@ function runSimcProcess(simId, type, options) {
         return reject(new Error('Failed to spawn Docker process: ' + spawnErr.message));
       }
 
+      // Store reference so the process can be killed externally
+      currentProcess = proc;
+      currentJobId = simId;
+
       let stdout = '';
       let stderr = '';
       let killed = false;
@@ -319,6 +325,8 @@ function runSimcProcess(simId, type, options) {
       proc.on('error', (err) => {
         try {
           clearTimeout(timer);
+          currentProcess = null;
+          currentJobId = null;
           console.error('[simc-runner] Process error:', err);
           reject(new Error('Docker process error: ' + err.message));
         } catch (_) {
@@ -329,6 +337,8 @@ function runSimcProcess(simId, type, options) {
       proc.on('close', (code) => {
         try {
           clearTimeout(timer);
+          currentProcess = null;
+          currentJobId = null;
 
           if (killed) {
             return reject(new Error('Simulation timed out'));
@@ -460,6 +470,101 @@ function getQueueStatus() {
   }
 }
 
+// --------------- Cancel ---------------
+
+function cancelSimulation(simId) {
+  try {
+    if (!simId) {
+      return { ok: false, message: 'No simId provided' };
+    }
+
+    const numId = Number(simId);
+
+    // Check if it's in the queue
+    const queueIdx = queue.findIndex(function (job) {
+      return Number(job.simId) === numId;
+    });
+
+    if (queueIdx !== -1) {
+      queue.splice(queueIdx, 1);
+      console.log(`[simc-runner] Cancelled queued simulation ${simId}`);
+      try {
+        db.updateSimulation(simId, { status: 'cancelled' });
+      } catch (dbErr) {
+        console.error('[simc-runner] Error updating cancelled simulation:', dbErr);
+      }
+      return { ok: true, message: 'Cancelled' };
+    }
+
+    // Check if it's the currently running job
+    if (currentProcess && currentJobId !== null && Number(currentJobId) === numId) {
+      console.log(`[simc-runner] Killing running simulation ${simId}`);
+      try {
+        currentProcess.kill('SIGKILL');
+      } catch (killErr) {
+        console.error('[simc-runner] Error killing process:', killErr);
+      }
+      currentProcess = null;
+      currentJobId = null;
+      try {
+        db.updateSimulation(simId, { status: 'cancelled' });
+      } catch (dbErr) {
+        console.error('[simc-runner] Error updating cancelled simulation:', dbErr);
+      }
+      return { ok: true, message: 'Cancelled' };
+    }
+
+    return { ok: false, message: 'Not found' };
+  } catch (err) {
+    console.error('[simc-runner] Error in cancelSimulation:', err);
+    return { ok: false, message: 'Error: ' + err.message };
+  }
+}
+
+function cancelAll() {
+  try {
+    let count = 0;
+
+    // Cancel all queued jobs
+    while (queue.length > 0) {
+      const job = queue.shift();
+      try {
+        db.updateSimulation(job.simId, { status: 'cancelled' });
+      } catch (dbErr) {
+        console.error('[simc-runner] Error updating cancelled simulation:', dbErr);
+      }
+      count++;
+    }
+
+    // Kill the currently running process
+    if (currentProcess) {
+      console.log(`[simc-runner] Killing running simulation ${currentJobId}`);
+      const runningId = currentJobId;
+      try {
+        currentProcess.kill('SIGKILL');
+      } catch (killErr) {
+        console.error('[simc-runner] Error killing process:', killErr);
+      }
+      currentProcess = null;
+      currentJobId = null;
+      if (runningId !== null) {
+        try {
+          db.updateSimulation(runningId, { status: 'cancelled' });
+        } catch (dbErr) {
+          console.error('[simc-runner] Error updating cancelled simulation:', dbErr);
+        }
+        count++;
+      }
+    }
+
+    console.log(`[simc-runner] cancelAll: cancelled ${count} simulations`);
+    return { ok: true, cancelled: count };
+  } catch (err) {
+    console.error('[simc-runner] Error in cancelAll:', err);
+    return { ok: false, cancelled: 0, message: 'Error: ' + err.message };
+  }
+}
+
 // --------------- Exports ---------------
 
 module.exports = {
@@ -467,5 +572,7 @@ module.exports = {
   processQueue,
   runSimcProcess,
   testSimc,
-  getQueueStatus
+  getQueueStatus,
+  cancelSimulation,
+  cancelAll
 };
