@@ -261,6 +261,11 @@ function generateSimcProfile(character) {
       console.error('[simc-parser] Error generating equipment:', equipErr);
     }
 
+    // Auto-use trinkets and suppress warning
+    lines.push('');
+    lines.push('# Auto-generated options');
+    lines.push('use_item_verification=0');
+
     return lines.join('\n');
   } catch (err) {
     console.error('[simc-parser] Error generating SimC profile:', err);
