@@ -144,8 +144,8 @@ function switchServer(idx) {
 
 function addServer() {
   try {
-    var nameInput = document.getElementById('new-server-name');
-    var urlInput = document.getElementById('new-server-url');
+    var nameInput = document.getElementById('newServerName');
+    var urlInput = document.getElementById('newServerUrl');
     if (!nameInput || !urlInput) return;
 
     var name = nameInput.value.trim();
@@ -201,7 +201,7 @@ function removeServer(idx) {
 
 function renderServerList() {
   try {
-    var container = document.getElementById('server-list');
+    var container = document.getElementById('serverList');
     if (!container) return;
 
     var servers = getServers();
@@ -426,8 +426,10 @@ function navigateTo(page) {
     // Load page data
     if (page === 'characters') loadCharacters();
     if (page === 'dashboard' && currentChar) renderDashboard();
-    if (page === 'simulation' && currentChar) renderSimPage();
-    if (page === 'optimization' && currentChar) loadOptimizations();
+    if (page === 'simulate' && currentChar) renderSimPage();
+    if (page === 'bis' && currentChar) loadOptimizations();
+    if (page === 'enchants' && currentChar) loadOptimizations();
+    if (page === 'upgrades' && currentChar) loadOptimizations();
   } catch (e) {
     console.error('navigateTo: failed', e);
   }
@@ -579,7 +581,7 @@ function testBlizzard() {
 
 async function loadCharacters() {
   try {
-    var container = document.getElementById('character-list');
+    var container = document.getElementById('characterList');
     if (!container) return;
 
     container.innerHTML = '<div class="loading">Loading characters...</div>';
@@ -641,7 +643,7 @@ async function loadCharacters() {
     container.innerHTML = html;
   } catch (e) {
     console.error('loadCharacters: failed', e);
-    var c = document.getElementById('character-list');
+    var c = document.getElementById('characterList');
     if (c) c.innerHTML = '<div class="error-msg">Error loading characters.</div>';
   }
 }
@@ -660,7 +662,7 @@ function showSimcImport() {
       + '</div>'
       + '<div class="modal-body">'
       + '<p>Paste your /simc output below:</p>'
-      + '<textarea id="simc-input" rows="12" style="width:100%;font-family:monospace;'
+      + '<textarea id="simcInput" rows="12" style="width:100%;font-family:monospace;'
       + 'background:#1a1a2e;color:#eee;border:1px solid #444;border-radius:4px;padding:8px;"'
       + ' placeholder="Paste /simc string here..."></textarea>'
       + '</div>'
@@ -698,13 +700,13 @@ function showArmoryImport() {
       + '</div>'
       + '<div class="form-group">'
       + '<label>Character Name</label>'
-      + '<input type="text" id="armory-name" placeholder="Character name" '
+      + '<input type="text" id="armoryName" placeholder="Character name" '
       + 'style="width:100%;padding:8px;background:#1a1a2e;color:#eee;border:1px solid #444;'
       + 'border-radius:4px;" />'
       + '</div>'
       + '<div class="form-group" style="margin-top:10px;">'
       + '<label>Realm</label>'
-      + '<select id="armory-realm" style="width:100%;padding:8px;background:#1a1a2e;'
+      + '<select id="armoryRealm" style="width:100%;padding:8px;background:#1a1a2e;'
       + 'color:#eee;border:1px solid #444;border-radius:4px;">'
       + '<option value="">-- Select Realm --</option>'
       + realmOptions
@@ -712,7 +714,7 @@ function showArmoryImport() {
       + '</div>'
       + '<div class="form-group" style="margin-top:10px;">'
       + '<label>Region</label>'
-      + '<select id="armory-region" style="width:100%;padding:8px;background:#1a1a2e;'
+      + '<select id="armoryRegion" style="width:100%;padding:8px;background:#1a1a2e;'
       + 'color:#eee;border:1px solid #444;border-radius:4px;">'
       + '<option value="eu">EU</option>'
       + '<option value="us">US</option>'
@@ -745,7 +747,7 @@ function closeImportModal() {
 
 async function doSimcImport() {
   try {
-    var textarea = document.getElementById('simc-input');
+    var textarea = document.getElementById('simcInput');
     if (!textarea) return;
 
     var simcString = textarea.value.trim();
@@ -774,9 +776,9 @@ async function doSimcImport() {
 
 async function doArmoryImport() {
   try {
-    var nameInput = document.getElementById('armory-name');
-    var realmSelect = document.getElementById('armory-realm');
-    var regionSelect = document.getElementById('armory-region');
+    var nameInput = document.getElementById('armoryName');
+    var realmSelect = document.getElementById('armoryRealm');
+    var regionSelect = document.getElementById('armoryRegion');
 
     if (!nameInput || !realmSelect || !regionSelect) return;
 
@@ -1005,7 +1007,7 @@ function renderDashboard() {
 
 function renderSimPage() {
   try {
-    var container = document.getElementById('page-simulation');
+    var container = document.getElementById('page-simulate');
     if (!container) return;
 
     if (!currentChar) {
@@ -1333,7 +1335,7 @@ async function loadSimHistory() {
 
 async function loadOptimizations() {
   try {
-    var container = document.getElementById('page-optimization');
+    var container = document.getElementById('page-' + currentPage);
     if (!container) return;
 
     if (!currentChar) {
@@ -1440,7 +1442,7 @@ async function loadOptimizations() {
     container.innerHTML = html;
   } catch (e) {
     console.error('loadOptimizations: failed', e);
-    var c = document.getElementById('page-optimization');
+    var c = document.getElementById('page-' + currentPage);
     if (c) {
       c.innerHTML = '<div class="error-msg">Failed to load optimization data.</div>';
     }
@@ -1701,7 +1703,7 @@ function init() {
     navigateTo('characters');
 
     // Settings button
-    var settingsBtn = document.getElementById('btn-settings');
+    var settingsBtn = document.getElementById('btnOpenSettings');
     if (settingsBtn) {
       settingsBtn.addEventListener('click', function () {
         try { showSettings(); } catch (e) { console.error('settings btn click error', e); }
