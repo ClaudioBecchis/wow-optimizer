@@ -306,8 +306,8 @@ async function importCharacter(realm, name, region) {
     const profileNs = `profile-${effectiveRegion}`;
     const basePath = `/profile/wow/character/${encodeURIComponent(realmSlug)}/${encodeURIComponent(charName)}`;
 
-    // Fetch profile, equipment, stats and media in parallel
-    const [profile, equipmentData, statsData, mediaData] = await Promise.all([
+    // Fetch profile, equipment, stats, media and specializations in parallel
+    const [profile, equipmentData, statsData, mediaData, specsData] = await Promise.all([
       apiGet(basePath, effectiveRegion, profileNs),
       apiGet(`${basePath}/equipment`, effectiveRegion, profileNs).catch((err) => {
         console.error('[blizzard-api] Equipment fetch failed:', err.message);
@@ -320,7 +320,8 @@ async function importCharacter(realm, name, region) {
       apiGet(`${basePath}/character-media`, effectiveRegion, profileNs).catch((err) => {
         console.error('[blizzard-api] Media fetch failed:', err.message);
         return null;
-      })
+      }),
+      getCharacterSpecializations(realm, name, effectiveRegion)
     ]);
 
     // --- Build equipment map ---
@@ -402,6 +403,35 @@ async function importCharacter(realm, name, region) {
       console.error('[blizzard-api] Error extracting avatar:', mErr);
     }
 
+    // --- Talent loadout code ---
+    let talents = '';
+    try {
+      if (specsData && Array.isArray(specsData.specializations)) {
+        // Find the active specialization matching the profile's active_spec,
+        // or fall back to the first specialization with a loadout_code
+        const activeSpecName = profile.active_spec?.name || '';
+        let activeSpec = null;
+
+        if (activeSpecName) {
+          activeSpec = specsData.specializations.find(
+            (s) => s.specialization?.name === activeSpecName
+          );
+        }
+
+        if (!activeSpec) {
+          // Fall back: pick the first spec that has a loadout_code
+          activeSpec = specsData.specializations.find((s) => s.loadout_code);
+        }
+
+        if (activeSpec && activeSpec.loadout_code) {
+          talents = activeSpec.loadout_code;
+          console.log('[blizzard-api] Extracted talent loadout_code for', activeSpecName || 'active spec');
+        }
+      }
+    } catch (talentErr) {
+      console.error('[blizzard-api] Error extracting talents:', talentErr);
+    }
+
     return {
       name: profile.name || name,
       realm: profile.realm?.slug || realm,
@@ -413,17 +443,39 @@ async function importCharacter(realm, name, region) {
       ilvl: profile.equipped_item_level || profile.average_item_level || 0,
       equipment,
       stats,
+      talents,
       avatarUrl,
       blizzardData: {
         profile,
         equipment: equipmentData,
         statistics: statsData,
-        media: mediaData
+        media: mediaData,
+        specializations: specsData
       }
     };
   } catch (err) {
     console.error('[blizzard-api] Error importing character:', err);
     throw err;
+  }
+}
+
+// --------------- Character Specializations ---------------
+
+/**
+ * Fetch character specializations (talent loadout) from Blizzard API.
+ * @param {string} realm  - Realm name or slug
+ * @param {string} name   - Character name
+ * @param {string} region - Region key (eu, us)
+ * @returns {Promise<object|null>} Specializations data or null on failure
+ */
+async function getCharacterSpecializations(realm, name, region) {
+  try {
+    var realmSlug = resolveRealmSlug(realm);
+    var charSlug = name.toLowerCase().trim();
+    return await apiGet('/profile/wow/character/' + realmSlug + '/' + charSlug + '/specializations', region, 'profile-' + (region || 'eu'));
+  } catch (err) {
+    console.error('[blizzard-api] Specs fetch failed:', err.message);
+    return null;
   }
 }
 
@@ -448,6 +500,7 @@ async function testConnection() {
 module.exports = {
   getAccessToken,
   apiGet,
+  getCharacterSpecializations,
   importCharacter,
   testConnection
 };

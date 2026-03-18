@@ -1230,7 +1230,17 @@ function pollSimStatus(jobId, type) {
               '<div style="padding:12px;background:#1a2e1a;border-radius:6px;color:#2ecc71;">'
               + 'Simulation complete!</div>';
           }
-          renderSimResult(result.result || result, type);
+          // Fetch the full result (with stat_weights_json etc.) from the result endpoint
+          var fullResult = result.result || result;
+          try {
+            var fetched = await apiFetch('/simulate/result/' + encodeURIComponent(jobId), 'GET');
+            if (fetched && !fetched.error) {
+              fullResult = fetched;
+            }
+          } catch (fetchErr) {
+            console.error('pollSimStatus: failed to fetch full result', fetchErr);
+          }
+          renderSimResult(fullResult, type);
           loadSimHistory();
         } else if (status === 'cancelled') {
           clearInterval(timer);
