@@ -194,10 +194,36 @@ function showResults(job) {
       + '</div>';
   });
 
-  // Show skipped items
+  // Show skipped items from SimC errors
   if (job.skippedItems && job.skippedItems.length > 0) {
     html += '<div style="margin-top:12px;padding:10px;background:#15120d;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--text-dim)">';
     html += '<strong style="color:var(--gold-dim)">Oggetti incompatibili saltati:</strong> ' + job.skippedItems.map(esc).join(', ');
+    html += '</div>';
+  }
+
+  // Show discarded items (obsolete/old expansion) - BUTTA list
+  if (job.discardedItems && job.discardedItems.length > 0) {
+    var slotIT = {head:'Testa',neck:'Collo',shoulder:'Spalle',back:'Schiena',chest:'Petto',wrist:'Polsi',hands:'Mani',waist:'Vita',legs:'Gambe',feet:'Piedi',finger1:'Anello 1',finger2:'Anello 2',trinket1:'Trinket 1',trinket2:'Trinket 2',main_hand:'Arma',off_hand:'Seconda mano'};
+    html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">';
+    html += '<div style="font-family:Cinzel,serif;color:var(--red);font-size:16px;font-weight:700;margin-bottom:12px">Oggetti da Buttare / Disincantare</div>';
+    job.discardedItems.forEach(function(item) {
+      var slotName = item.slot ? (slotIT[item.slot] || item.slot) : '';
+      var itemLink = item.itemId && item.itemId !== '0'
+        ? '<a href="https://it.wowhead.com/item=' + item.itemId + '" target="_blank" data-wowhead="item=' + item.itemId + '&domain=it" style="color:var(--red);text-decoration:none">' + esc(item.name) + '</a>'
+        : '<span style="color:var(--red)">' + esc(item.name) + '</span>';
+      html += '<div class="result-item worse">'
+        + '<div style="width:36px;text-align:center;font-size:18px;color:var(--red)">&#10005;</div>'
+        + '<div style="min-width:0;flex:1">'
+        +   '<div style="display:flex;align-items:center;gap:8px">'
+        +     (slotName ? '<span style="font-size:10px;color:var(--gold-dark);text-transform:uppercase;letter-spacing:0.5px;min-width:65px">' + esc(slotName) + '</span>' : '')
+        +     itemLink
+        +     (item.ilvl ? '<span style="font-size:11px;color:var(--text-dim);margin-left:6px">' + esc(item.ilvl) + ' ilvl</span>' : '')
+        +   '</div>'
+        + '</div>'
+        + '<span class="result-verdict verdict-discard">BUTTA</span>'
+        + '<div style="font-size:11px;color:var(--text-dim);width:160px;text-align:right">' + esc(item.reason) + '</div>'
+        + '</div>';
+    });
     html += '</div>';
   }
 

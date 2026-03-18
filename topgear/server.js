@@ -71,7 +71,7 @@ const SLOTS = ['head','neck','shoulder','back','chest','wrist','hands','waist','
  * - baseProfile: the character profile (everything before bag items)
  * - bagItems: array of {slot, gear, name} from commented bag items
  */
-function parseSimcBags(simcText) {
+function parseSimcBags(simcText, returnAll) {
   var lines = simcText.split('\n');
   var profileLines = [];
   var bagItems = [];
@@ -174,6 +174,10 @@ function parseSimcBags(simcText) {
     return true;
   });
 
+  if (returnAll) {
+    return { allBagItems: bagItems };
+  }
+
   return {
     baseProfile: profileLines.join('\n'),
     bagItems: filteredBags,
@@ -248,19 +252,41 @@ app.post('/api/simulate', async function(req, res) {
     var parsed = parseSimcBags(simcText);
     var bagItems = parsed.bagItems;
 
-    // Verify each bag item via Blizzard API
+    // Verify each bag item via Blizzard API - track discarded items
     var validatedBags = [];
-    var blizzardBlocked = 0;
+    var discardedItems = [];
     for (var bi = 0; bi < bagItems.length; bi++) {
       var valid = await isItemValid(bagItems[bi].itemId);
       if (valid) {
         validatedBags.push(bagItems[bi]);
       } else {
-        blizzardBlocked++;
+        discardedItems.push({
+          name: bagItems[bi].name,
+          slot: bagItems[bi].slot,
+          itemId: bagItems[bi].itemId,
+          ilvl: bagItems[bi].ilvl,
+          reason: 'Oggetto obsoleto (espansione vecchia)'
+        });
       }
     }
+    // Also track ilvl-filtered items from parseSimcBags
+    var allOriginalBags = parseSimcBags(simcText, true);
+    if (allOriginalBags && allOriginalBags.allBagItems) {
+      allOriginalBags.allBagItems.forEach(function(item) {
+        var inFiltered = validatedBags.some(function(v) { return v.itemId === item.itemId && v.slot === item.slot; });
+        var inDiscarded = discardedItems.some(function(d) { return d.itemId === item.itemId && d.slot === item.slot; });
+        if (!inFiltered && !inDiscarded) {
+          discardedItems.push({
+            name: item.name,
+            slot: item.slot,
+            itemId: item.itemId,
+            ilvl: item.ilvl,
+            reason: 'ilvl troppo basso'
+          });
+        }
+      });
+    }
     bagItems = validatedBags;
-    parsed.skippedLowIlvl += blizzardBlocked;
 
     // Also accept manually added alternatives
     if (req.body.alternatives && req.body.alternatives.length > 0) {
@@ -303,6 +329,7 @@ app.post('/api/simulate', async function(req, res) {
     jobs[jobId] = {
       status: 'running', progress: 0, dps: null, results: null,
       bagItemCount: bagItems.length, htmlReport: null, error: null,
+      discardedItems: discardedItems,
       startTime: Date.now()
     };
 
