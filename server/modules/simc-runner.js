@@ -153,58 +153,47 @@ async function runJob(job) {
     try {
       if (fs.existsSync(jsonFile)) {
         const raw = fs.readFileSync(jsonFile, 'utf-8');
-        const results = JSON.parse(raw);
+        const resultData = JSON.parse(raw);
 
-        const updateData = {
-          status: 'completed',
-          progress: 100,
-          results: {}
-        };
+        let dps = 0;
+        let statWeights = null;
+        let duration = 0;
 
         // Extract DPS
         try {
-          if (results.sim && results.sim.players && results.sim.players.length > 0) {
-            const player = results.sim.players[0];
-            updateData.results.dps = player.collected_data && player.collected_data.dps
+          if (resultData.sim && resultData.sim.players && resultData.sim.players.length > 0) {
+            const player = resultData.sim.players[0];
+
+            dps = player.collected_data && player.collected_data.dps
               ? player.collected_data.dps.mean || 0
               : 0;
-            updateData.results.dps_min = player.collected_data && player.collected_data.dps
-              ? player.collected_data.dps.min || 0
-              : 0;
-            updateData.results.dps_max = player.collected_data && player.collected_data.dps
-              ? player.collected_data.dps.max || 0
-              : 0;
-            updateData.results.dps_error = player.collected_data && player.collected_data.dps
-              ? player.collected_data.dps.mean_std_dev || 0
-              : 0;
-            updateData.results.player_name = player.name || '';
-            updateData.results.player_spec = player.specialization || '';
 
-            // Stat weights
+            // Stat weights (only for stat_weights sims)
             if (job.type === 'stat_weights' && player.scale_factors) {
-              updateData.results.stat_weights = player.scale_factors;
+              statWeights = player.scale_factors;
             }
           }
         } catch (extractErr) {
           console.error('[simc-runner] Error extracting results:', extractErr);
-          updateData.results.raw = results;
         }
 
-        // Simulation metadata
+        // Simulation metadata - elapsed time as duration
         try {
-          if (results.sim) {
-            updateData.results.iterations = results.sim.options
-              ? results.sim.options.iterations || 0
-              : 0;
-            updateData.results.elapsed_time = results.sim.statistics
-              ? results.sim.statistics.elapsed_cpu_seconds || 0
-              : 0;
+          if (resultData.sim && resultData.sim.statistics) {
+            duration = resultData.sim.statistics.elapsed_cpu_seconds || 0;
           }
         } catch (metaErr) {
           console.error('[simc-runner] Error extracting metadata:', metaErr);
         }
 
-        db.updateSimulation(job.simId, updateData);
+        db.updateSimulation(job.simId, {
+          status: 'done',
+          progress: 100,
+          dps: dps,
+          result_json: resultData,
+          stat_weights_json: statWeights,
+          duration_seconds: duration
+        });
       } else {
         db.updateSimulation(job.simId, {
           status: 'error',

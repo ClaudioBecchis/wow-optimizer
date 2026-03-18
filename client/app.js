@@ -34,11 +34,19 @@ var QUALITY_COLORS = {
 };
 
 var STAT_COLORS = {
-  crit: '#e74c3c',
-  haste: '#f1c40f',
-  mastery: '#9b59b6',
-  vers: '#2ecc71',
-  versatility: '#2ecc71',
+  strength: '#ffd100',
+  agility: '#ffd100',
+  intellect: '#ffd100',
+  crit: '#bf616a',
+  critrating: '#bf616a',
+  criticalstrike: '#bf616a',
+  haste: '#ebcb8b',
+  hasterating: '#ebcb8b',
+  mastery: '#a335ee',
+  masteryrating: '#a335ee',
+  vers: '#1eff00',
+  versatility: '#1eff00',
+  versatilityrating: '#1eff00',
 };
 
 var GEAR_SLOTS = [
@@ -1124,7 +1132,7 @@ function pollSimStatus(jobId, type) {
           return;
         }
 
-        if (status === 'complete' || status === 'done' || status === 'finished') {
+        if (status === 'complete' || status === 'done' || status === 'completed' || status === 'finished') {
           clearInterval(timer);
           if (statusEl) {
             statusEl.innerHTML =
@@ -1163,6 +1171,55 @@ function pollSimStatus(jobId, type) {
   }
 }
 
+function generatePawnString(weights, charName) {
+  try {
+    if (!weights || typeof weights !== 'object') return '';
+
+    var name = charName || (currentChar ? (currentChar.name || 'SimC') : 'SimC');
+
+    // Map SimC stat keys to Pawn stat names
+    var pawnMap = {
+      strength: 'Strength',
+      agility: 'Agility',
+      intellect: 'Intellect',
+      crit_rating: 'CritRating',
+      critrating: 'CritRating',
+      crit: 'CritRating',
+      haste_rating: 'HasteRating',
+      hasterating: 'HasteRating',
+      haste: 'HasteRating',
+      mastery_rating: 'MasteryRating',
+      masteryrating: 'MasteryRating',
+      mastery: 'MasteryRating',
+      versatility_rating: 'Versatility',
+      versatilityrating: 'Versatility',
+      versatility: 'Versatility',
+      vers: 'Versatility',
+    };
+
+    var parts = [];
+    Object.keys(weights).forEach(function (key) {
+      try {
+        var lk = key.toLowerCase().replace(/[\s-]/g, '_');
+        var pawnName = pawnMap[lk] || pawnMap[lk.replace(/_/g, '')] || null;
+        if (pawnName) {
+          var val = parseFloat(weights[key]);
+          if (!isNaN(val) && val > 0) {
+            parts.push(pawnName + '=' + val.toFixed(2));
+          }
+        }
+      } catch (_) { /* ignore */ }
+    });
+
+    if (parts.length === 0) return '';
+
+    return '( Pawn: v1: "' + name + '": ' + parts.join(', ') + ' )';
+  } catch (e) {
+    console.error('generatePawnString: failed', e);
+    return '';
+  }
+}
+
 function renderSimResult(result, type) {
   try {
     var container = document.getElementById('sim-result');
@@ -1184,6 +1241,20 @@ function renderSimResult(result, type) {
       }
 
       html += renderStatBars(weights);
+
+      // Pawn import string
+      var pawnStr = generatePawnString(weights);
+      if (pawnStr) {
+        html += '<div class="panel" style="margin-top:16px;background:#1a1a2e;padding:12px;border-radius:6px;">'
+          + '<div class="panel-title" style="color:#ffd100;font-weight:bold;margin-bottom:8px;">Pawn Import String</div>'
+          + '<input type="text" readonly value="' + escapeHtml(pawnStr) + '" onclick="this.select()" '
+          + 'style="width:100%;font-family:monospace;font-size:11px;background:#0a0a1a;color:#ccc;'
+          + 'border:1px solid #444;border-radius:4px;padding:6px;box-sizing:border-box;" />'
+          + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value)" '
+          + 'style="margin-top:6px;padding:4px 12px;background:#ffd100;color:#000;border:none;'
+          + 'border-radius:4px;cursor:pointer;font-weight:bold;">Copia</button>'
+          + '</div>';
+      }
     } else {
       // DPS result
       var dpsVal = result.dps || result.mean || result.averageDps || 0;
@@ -1223,11 +1294,34 @@ function renderStatBars(weights) {
     var entries = [];
     var maxVal = 0;
 
+    // Friendly display names
+    var displayNames = {
+      strength: 'Strength',
+      agility: 'Agility',
+      intellect: 'Intellect',
+      crit_rating: 'Critical Strike',
+      critrating: 'Critical Strike',
+      crit: 'Critical Strike',
+      haste_rating: 'Haste',
+      hasterating: 'Haste',
+      haste: 'Haste',
+      mastery_rating: 'Mastery',
+      masteryrating: 'Mastery',
+      mastery: 'Mastery',
+      versatility_rating: 'Versatility',
+      versatilityrating: 'Versatility',
+      versatility: 'Versatility',
+      vers: 'Versatility',
+    };
+
     Object.keys(weights).forEach(function (key) {
       try {
         var val = parseFloat(weights[key]) || 0;
         if (val > maxVal) maxVal = val;
-        entries.push({ stat: key, value: val });
+        var normalizedKey = key.toLowerCase().replace(/[\s-]/g, '_');
+        var displayKey = normalizedKey.replace(/_/g, '');
+        var label = displayNames[normalizedKey] || displayNames[displayKey] || key;
+        entries.push({ stat: key, label: label, value: val, colorKey: displayKey });
       } catch (_) { /* ignore */ }
     });
 
@@ -1236,24 +1330,23 @@ function renderStatBars(weights) {
     if (entries.length === 0) return '<p style="color:#888;">No stat weight data.</p>';
     if (maxVal === 0) maxVal = 1;
 
-    var html = '<div class="stat-bars" style="display:flex;flex-direction:column;gap:8px;">';
+    var html = '<div class="stat-bars" style="display:flex;flex-direction:column;gap:10px;">';
 
     entries.forEach(function (entry) {
       try {
         var pct = ((entry.value / maxVal) * 100).toFixed(1);
-        var statKey = entry.stat.toLowerCase().replace(/[\s_-]/g, '');
-        var color = STAT_COLORS[statKey] || '#3498db';
+        var color = STAT_COLORS[entry.colorKey] || '#3498db';
 
         html += '<div class="stat-bar-row">'
-          + '<div style="display:flex;justify-content:space-between;margin-bottom:2px;">'
-          + '<span style="color:#ccc;font-size:13px;text-transform:capitalize;">'
-          + escapeHtml(entry.stat) + '</span>'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:3px;">'
+          + '<span style="color:#ccc;font-size:13px;font-weight:600;">'
+          + escapeHtml(entry.label) + '</span>'
           + '<span style="color:#eee;font-weight:bold;font-size:13px;">'
-          + fmt(entry.value) + '</span>'
+          + entry.value.toFixed(2) + '</span>'
           + '</div>'
-          + '<div style="background:#0a0a1a;border-radius:4px;height:18px;overflow:hidden;">'
+          + '<div style="background:#0a0a1a;border-radius:4px;height:22px;overflow:hidden;position:relative;">'
           + '<div style="background:' + color + ';width:' + pct + '%;height:100%;'
-          + 'border-radius:4px;transition:width 0.4s ease;"></div>'
+          + 'border-radius:4px;transition:width 0.4s ease;box-shadow:0 0 6px ' + color + '44;"></div>'
           + '</div></div>';
       } catch (_) { /* ignore */ }
     });
@@ -1263,6 +1356,142 @@ function renderStatBars(weights) {
   } catch (e) {
     console.error('renderStatBars: failed', e);
     return '<p style="color:#888;">Error rendering stat bars.</p>';
+  }
+}
+
+function drawDpsChart(canvasId, history) {
+  try {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Filter entries with valid DPS and sort by date ascending
+    var dataPoints = [];
+    history.forEach(function (entry) {
+      try {
+        var dps = parseFloat(entry.dps || entry.result_dps || 0);
+        var date = entry.date || entry.createdAt || entry.created_at || '';
+        if (dps > 0 && date) {
+          dataPoints.push({ dps: dps, date: new Date(date) });
+        }
+      } catch (_) { /* ignore */ }
+    });
+
+    dataPoints.sort(function (a, b) { return a.date.getTime() - b.date.getTime(); });
+
+    if (dataPoints.length < 2) return;
+
+    var W = canvas.width;
+    var H = canvas.height;
+    var padL = 70;
+    var padR = 20;
+    var padT = 20;
+    var padB = 40;
+    var chartW = W - padL - padR;
+    var chartH = H - padT - padB;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Compute min/max DPS with padding
+    var minDps = dataPoints[0].dps;
+    var maxDps = dataPoints[0].dps;
+    dataPoints.forEach(function (dp) {
+      if (dp.dps < minDps) minDps = dp.dps;
+      if (dp.dps > maxDps) maxDps = dp.dps;
+    });
+    var dpsPadding = (maxDps - minDps) * 0.1 || 100;
+    minDps = Math.max(0, minDps - dpsPadding);
+    maxDps = maxDps + dpsPadding;
+    var dpsRange = maxDps - minDps || 1;
+
+    // Grid lines
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 1;
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+
+    var gridSteps = 5;
+    for (var i = 0; i <= gridSteps; i++) {
+      var yVal = minDps + (dpsRange * i / gridSteps);
+      var yPos = padT + chartH - (chartH * i / gridSteps);
+      ctx.beginPath();
+      ctx.moveTo(padL, yPos);
+      ctx.lineTo(padL + chartW, yPos);
+      ctx.stroke();
+      ctx.fillText(Math.round(yVal).toLocaleString(), padL - 8, yPos + 4);
+    }
+
+    // Date labels
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    var labelCount = Math.min(dataPoints.length, 6);
+    var labelStep = Math.max(1, Math.floor((dataPoints.length - 1) / (labelCount - 1)));
+    for (var li = 0; li < dataPoints.length; li += labelStep) {
+      var xPos = padL + (chartW * li / (dataPoints.length - 1));
+      var d = dataPoints[li].date;
+      var lbl = (d.getMonth() + 1) + '/' + d.getDate();
+      ctx.fillText(lbl, xPos, H - 8);
+    }
+
+    // Draw line
+    ctx.strokeStyle = '#ffd100';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+
+    dataPoints.forEach(function (dp, idx) {
+      var x = padL + (chartW * idx / (dataPoints.length - 1));
+      var y = padT + chartH - (chartH * (dp.dps - minDps) / dpsRange);
+      if (idx === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+
+    // Glow effect
+    ctx.strokeStyle = '#ffd10044';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    dataPoints.forEach(function (dp, idx) {
+      var x = padL + (chartW * idx / (dataPoints.length - 1));
+      var y = padT + chartH - (chartH * (dp.dps - minDps) / dpsRange);
+      if (idx === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Data points (dots)
+    dataPoints.forEach(function (dp, idx) {
+      var x = padL + (chartW * idx / (dataPoints.length - 1));
+      var y = padT + chartH - (chartH * (dp.dps - minDps) / dpsRange);
+
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffd100';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0a1a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+    // Title
+    ctx.fillStyle = '#888';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('DPS', padL, padT - 6);
+  } catch (e) {
+    console.error('drawDpsChart: failed', e);
   }
 }
 
@@ -1290,7 +1519,22 @@ async function loadSimHistory() {
       return;
     }
 
-    var html = '<table style="width:100%;border-collapse:collapse;color:#ccc;">'
+    var html = '';
+
+    // DPS history chart (only if we have multiple entries with DPS data)
+    var dpsEntries = history.filter(function (e) {
+      return parseFloat(e.dps || e.result_dps || 0) > 0;
+    });
+
+    if (dpsEntries.length >= 2) {
+      html += '<div style="background:#0a0a1a;border-radius:6px;padding:12px;margin-bottom:16px;">'
+        + '<h4 style="color:#ffd100;margin:0 0 8px 0;">DPS History</h4>'
+        + '<canvas id="dps-history-chart" width="700" height="260" '
+        + 'style="width:100%;max-width:700px;height:auto;border-radius:4px;"></canvas>'
+        + '</div>';
+    }
+
+    html += '<table style="width:100%;border-collapse:collapse;color:#ccc;">'
       + '<thead><tr style="border-bottom:1px solid #333;">'
       + '<th style="text-align:left;padding:8px;">Date</th>'
       + '<th style="text-align:left;padding:8px;">Type</th>'
@@ -1314,7 +1558,7 @@ async function loadSimHistory() {
           + '<td style="padding:8px;text-align:right;font-weight:bold;">'
           + (dps !== '-' ? fmt(dps) : '-') + '</td>'
           + '<td style="padding:8px;text-align:right;">'
-          + '<span style="color:' + (status === 'done' || status === 'complete' ? '#2ecc71' : '#f39c12') + ';">'
+          + '<span style="color:' + (status === 'done' || status === 'completed' || status === 'complete' ? '#2ecc71' : '#f39c12') + ';">'
           + escapeHtml(status) + '</span></td>'
           + '</tr>';
       } catch (_) { /* ignore */ }
@@ -1322,6 +1566,13 @@ async function loadSimHistory() {
 
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    // Draw chart after DOM update
+    if (dpsEntries.length >= 2) {
+      setTimeout(function () {
+        drawDpsChart('dps-history-chart', history);
+      }, 50);
+    }
   } catch (e) {
     console.error('loadSimHistory: failed', e);
     var c = document.getElementById('sim-history');
