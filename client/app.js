@@ -798,13 +798,10 @@ async function doArmoryImport() {
     });
 
     if (result.error) {
-      if (result.error.toLowerCase().indexOf('api key') !== -1
-        || result.error.toLowerCase().indexOf('unauthorized') !== -1
-        || result.error.toLowerCase().indexOf('blizzard') !== -1
-        || result.status === 401) {
-        showToast('Blizzard API key not configured. Set it in Settings first.', 'error');
+      if (result.error.indexOf('non configurata') !== -1 || result.error.indexOf('credentials') !== -1) {
+        showToast('Blizzard API non configurata. Vai nelle Impostazioni.', 'error');
       } else {
-        showToast('Armory import failed: ' + result.error, 'error');
+        showToast('Errore import: ' + result.error, 'error');
       }
       return;
     }
