@@ -78,7 +78,12 @@ function parseSimcBags(simcText) {
     '169223', // Ashjra'kamas (8.3 cloak)
     '190455', // Unity (SL legendary belt)
     '190456', '190457', '190458', '190459', '190460', // SL legendary slots
+    '235499', // Fasciature Reshii (old)
   ];
+
+  // Block ALL items with ID below 210000 (pre-TWW items)
+  // Midnight items start around 228000+
+  var MIN_ITEM_ID = 210000;
 
   // Extract equipped item ilvls to calculate minimum threshold
   var equippedIlvls = {};
@@ -99,9 +104,15 @@ function parseSimcBags(simcText) {
 
   // Filter bag items
   var filteredBags = bagItems.filter(function(item) {
-    // Block obsolete items
+    // Block obsolete items by ID
     if (OBSOLETE_ITEMS.indexOf(item.itemId) !== -1) {
       console.log('[topgear] Blocked obsolete item: ' + item.name + ' (id=' + item.itemId + ')');
+      return false;
+    }
+    // Block items with very old item IDs (pre-TWW)
+    var numId = parseInt(item.itemId);
+    if (numId > 0 && numId < MIN_ITEM_ID) {
+      console.log('[topgear] Blocked old expansion item: ' + item.name + ' (id=' + item.itemId + ')');
       return false;
     }
     // Filter by ilvl
