@@ -1398,6 +1398,15 @@ function renderSimResult(result, type) {
       }
     }
 
+    // SimC HTML report button
+    if (result.html_report) {
+      html += '<div style="margin-top:20px;text-align:center;">';
+      html += '<a href="' + getApiBase().replace('/api', '') + result.html_report + '" target="_blank" class="btn btn-primary btn-lg" '
+        + 'style="display:inline-block;padding:12px 24px;background:#3498db;color:#fff;text-decoration:none;'
+        + 'border-radius:6px;font-weight:bold;font-size:16px;">Visualizza Report Completo SimC</a>';
+      html += '</div>';
+    }
+
     html += '</div>';
     container.innerHTML = html;
   } catch (e) {
@@ -1681,6 +1690,7 @@ async function loadSimHistory() {
       + '<th style="text-align:left;padding:8px;">Type</th>'
       + '<th style="text-align:right;padding:8px;">DPS</th>'
       + '<th style="text-align:right;padding:8px;">Status</th>'
+      + '<th style="text-align:center;padding:8px;">Report</th>'
       + '<th style="text-align:right;padding:8px;">Actions</th>'
       + '</tr></thead><tbody>';
 
@@ -1704,6 +1714,8 @@ async function loadSimHistory() {
           statusColor = '#888';
         }
 
+        var reportUrl = entry.html_report || '';
+
         html += '<tr style="border-bottom:1px solid #222;">'
           + '<td style="padding:8px;">' + escapeHtml(String(date)) + '</td>'
           + '<td style="padding:8px;text-transform:capitalize;">' + escapeHtml(simType) + '</td>'
@@ -1712,6 +1724,16 @@ async function loadSimHistory() {
           + '<td style="padding:8px;text-align:right;">'
           + '<span style="color:' + statusColor + ';">'
           + escapeHtml(status) + '</span></td>'
+          + '<td style="padding:8px;text-align:center;">';
+
+        if (reportUrl) {
+          html += '<a href="' + getApiBase().replace('/api', '') + escapeHtml(reportUrl)
+            + '" target="_blank" style="color:#3498db;text-decoration:none;font-weight:bold;">Report</a>';
+        } else {
+          html += '-';
+        }
+
+        html += '</td>'
           + '<td style="padding:8px;text-align:right;">';
 
         if (status === 'queued' || status === 'running') {

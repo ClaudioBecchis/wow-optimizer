@@ -194,7 +194,8 @@ async function runJob(job) {
           dps: dps,
           result_json: resultData,
           stat_weights_json: statWeights,
-          duration_seconds: duration
+          duration_seconds: duration,
+          html_report: '/reports/sim_' + job.simId + '.html'
         });
       } else {
         db.updateSimulation(job.simId, {
@@ -210,7 +211,7 @@ async function runJob(job) {
       });
     }
 
-    // Cleanup temp files
+    // Cleanup temp files (keep HTML report for viewing)
     try {
       if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
       if (fs.existsSync(jsonFile)) fs.unlinkSync(jsonFile);
@@ -242,6 +243,7 @@ function runSimcProcess(simId, type, options) {
         'simulationcraftorg/simc',
         `/sim/sim_${simId}.simc`,
         `json2=/sim/sim_${simId}.json`,
+        `html=/sim/sim_${simId}.html`,
         `threads=${threads}`,
         `iterations=${iterations}`
       ];

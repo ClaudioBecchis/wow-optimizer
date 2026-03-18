@@ -202,7 +202,8 @@ router.get('/status/:jobId', (req, res) => {
         dps: sim.dps || null,
         stat_weights_json: sim.stat_weights_json || null,
         type: sim.type || null,
-        duration: sim.duration_seconds || null
+        duration: sim.duration_seconds || null,
+        html_report: sim.html_report || null
       };
     }
 
@@ -246,6 +247,11 @@ router.get('/result/:jobId', (req, res) => {
       created_at: sim.created_at,
       updated_at: sim.updated_at
     };
+
+    // Include HTML report path if available
+    if (sim.html_report) {
+      response.html_report = sim.html_report;
+    }
 
     // Include DPS from the sim object directly (simc-runner saves it here)
     if (sim.dps) {
@@ -304,7 +310,7 @@ router.get('/history/:charId', (req, res) => {
 
     const summary = sims.map((s) => {
       try {
-        return {
+        const entry = {
           id: s.id,
           type: s.type,
           status: s.status,
@@ -314,6 +320,10 @@ router.get('/history/:charId', (req, res) => {
           created_at: s.created_at,
           updated_at: s.updated_at
         };
+        if (s.html_report) {
+          entry.html_report = s.html_report;
+        }
+        return entry;
       } catch (mapErr) {
         console.error('[simulate] Error mapping simulation:', mapErr);
         return { id: s.id, status: s.status || 'unknown' };

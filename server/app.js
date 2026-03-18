@@ -34,6 +34,13 @@ try {
 
 // --------------- Static files ---------------
 
+// Serve SimC HTML reports
+try {
+  app.use('/reports', express.static('/tmp/wow-optimizer'));
+} catch (err) {
+  console.error('[app] Failed to set up SimC reports static serving:', err);
+}
+
 try {
   const clientDir = path.join(__dirname, '..', 'client');
   app.use(express.static(clientDir));
