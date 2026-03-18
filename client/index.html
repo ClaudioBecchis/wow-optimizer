@@ -1027,51 +1027,51 @@
       <nav class="sidebar-nav">
         <!-- Server section -->
         <div class="sidebar-section-label">Server</div>
-        <div class="nav-item" data-page="servers">
+        <div class="nav-item" data-page="servers" onclick="navigateTo('servers')">
           <span class="nav-icon">&#9741;</span>
           <span>Servers</span>
         </div>
 
         <!-- Character section -->
         <div class="sidebar-section-label">Personaggio</div>
-        <div class="nav-item active" data-page="characters">
+        <div class="nav-item active" data-page="characters" onclick="navigateTo('characters')">
           <span class="nav-icon">&#9876;</span>
           <span>Personaggi</span>
         </div>
-        <div class="nav-item" data-page="dashboard">
+        <div class="nav-item" data-page="dashboard" onclick="navigateTo('dashboard')">
           <span class="nav-icon">&#9881;</span>
           <span>Dashboard</span>
         </div>
 
         <!-- Simulation section -->
         <div class="sidebar-section-label">Simulazione</div>
-        <div class="nav-item" data-page="simulate">
+        <div class="nav-item" data-page="simulate" onclick="navigateTo('simulate')">
           <span class="nav-icon">&#9889;</span>
           <span>Simula DPS</span>
         </div>
-        <div class="nav-item" data-page="statweights">
+        <div class="nav-item" data-page="statweights" onclick="navigateTo('statweights')">
           <span class="nav-icon">&#9878;</span>
           <span>Stat Weights</span>
         </div>
 
         <!-- Optimization section -->
         <div class="sidebar-section-label">Ottimizzazione</div>
-        <div class="nav-item" data-page="bis">
+        <div class="nav-item" data-page="bis" onclick="navigateTo('bis')">
           <span class="nav-icon">&#9733;</span>
           <span>Gear BiS</span>
         </div>
-        <div class="nav-item" data-page="enchants">
+        <div class="nav-item" data-page="enchants" onclick="navigateTo('enchants')">
           <span class="nav-icon">&#10024;</span>
           <span>Enchants &amp; Gems</span>
         </div>
-        <div class="nav-item" data-page="upgrades">
+        <div class="nav-item" data-page="upgrades" onclick="navigateTo('upgrades')">
           <span class="nav-icon">&#8679;</span>
           <span>Upgrade Finder</span>
         </div>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="nav-item" id="btnOpenSettings">
+        <div class="nav-item" id="btnOpenSettings" onclick="showSettings()">
           <span class="nav-icon">&#9881;</span>
           <span>Settings</span>
         </div>
@@ -1109,8 +1109,8 @@
               <input type="text" id="newServerUrl" placeholder="http://localhost:8080">
             </div>
             <div style="display:flex;gap:6px;align-items:flex-end;padding-bottom:1px;">
-              <button class="btn" id="btnTestServer">Test</button>
-              <button class="btn btn-primary" id="btnAddServer">Aggiungi</button>
+              <button class="btn" id="btnTestServer" onclick="testServer()">Test</button>
+              <button class="btn btn-primary" id="btnAddServer" onclick="addServer()">Aggiungi</button>
             </div>
           </div>
           <div class="status-msg" id="serverTestStatus"></div>
@@ -1126,8 +1126,8 @@
           <div class="card-header">Importa Personaggio</div>
 
           <div class="import-buttons">
-            <button class="btn btn-primary" id="btnShowSimcImport">Import da SimC (/simc)</button>
-            <button class="btn" id="btnShowArmoryImport">Import da Armory (opzionale)</button>
+            <button class="btn btn-primary" id="btnShowSimcImport" onclick="showSimcImport()">Import da SimC (/simc)</button>
+            <button class="btn" id="btnShowArmoryImport" onclick="showArmoryImport()">Import da Armory (opzionale)</button>
           </div>
 
           <!-- SimC import panel -->
@@ -1137,7 +1137,7 @@
               <label for="simcInput">SimC String</label>
               <textarea id="simcInput" rows="6" placeholder="Incolla qui l'output di /simc..."></textarea>
             </div>
-            <button class="btn btn-primary" id="btnImportSimc">Importa</button>
+            <button class="btn btn-primary" id="btnImportSimc" onclick="doSimcImport()">Importa</button>
             <div class="status-msg" id="simcImportStatus"></div>
           </div>
 
@@ -1176,7 +1176,7 @@
                 </select>
               </div>
             </div>
-            <button class="btn btn-primary" id="btnImportArmory">Importa da Armory</button>
+            <button class="btn btn-primary" id="btnImportArmory" onclick="doArmoryImport()">Importa da Armory</button>
             <div class="status-msg" id="armoryImportStatus"></div>
           </div>
         </div>
@@ -1247,8 +1247,8 @@
 
         <div id="simContent" style="display:none;">
           <div style="display:flex;gap:14px;margin-bottom:20px;">
-            <button class="btn btn-green btn-lg" id="btnSimDps">&#9889; Simula DPS</button>
-            <button class="btn btn-primary btn-lg" id="btnSimStatWeights">&#9878; Calcola Stat Weights</button>
+            <button class="btn btn-green btn-lg" id="btnSimDps" onclick="runSim('dps')">&#9889; Simula DPS</button>
+            <button class="btn btn-primary btn-lg" id="btnSimStatWeights" onclick="runSim('stat_weights')">&#9878; Calcola Stat Weights</button>
           </div>
 
           <!-- Progress -->
@@ -1406,7 +1406,7 @@
     <div class="modal">
       <div class="modal-header">
         <h2>Settings</h2>
-        <button class="modal-close" id="btnCloseSettings">&times;</button>
+        <button class="modal-close" id="btnCloseSettings" onclick="hideSettings()">&times;</button>
       </div>
       <div class="modal-body">
         <h3 class="page-subtitle" style="margin-top:0;">SimulationCraft</h3>
@@ -1424,7 +1424,7 @@
             <input type="number" id="settSimcIterations" value="10000" min="1000" max="100000" step="1000">
           </div>
         </div>
-        <button class="btn mt-sm" id="btnTestSimc">Test SimC</button>
+        <button class="btn mt-sm" id="btnTestSimc" onclick="testSimc()">Test SimC</button>
         <div class="status-msg" id="simcTestStatus"></div>
 
         <hr class="divider">
@@ -1447,12 +1447,12 @@
             <option value="kr">KR</option>
           </select>
         </div>
-        <button class="btn mt-sm" id="btnTestBlizzard">Test Blizzard API</button>
+        <button class="btn mt-sm" id="btnTestBlizzard" onclick="testBlizzard()">Test Blizzard API</button>
         <div class="status-msg" id="blizzTestStatus"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn" id="btnCancelSettings">Annulla</button>
-        <button class="btn btn-primary" id="btnSaveSettings">Salva</button>
+        <button class="btn" id="btnCancelSettings" onclick="hideSettings()">Annulla</button>
+        <button class="btn btn-primary" id="btnSaveSettings" onclick="saveSettings()">Salva</button>
       </div>
       <div class="status-msg" id="settingsSaveStatus" style="margin:0 20px 14px;"></div>
     </div>
