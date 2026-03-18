@@ -487,15 +487,19 @@ async function loadSettings() {
       return;
     }
 
-    var simcPathInput = document.getElementById('setting-simc-path');
-    var threadsInput = document.getElementById('setting-threads');
-    var iterationsInput = document.getElementById('setting-iterations');
-    var apiKeyInput = document.getElementById('setting-blizzard-key');
+    var simcPathInput = document.getElementById('settSimcPath');
+    var threadsInput = document.getElementById('settSimcThreads');
+    var iterationsInput = document.getElementById('settSimcIterations');
+    var clientIdInput = document.getElementById('settBlizzClientId');
+    var clientSecretInput = document.getElementById('settBlizzClientSecret');
+    var regionSelect = document.getElementById('settBlizzRegion');
 
-    if (simcPathInput) simcPathInput.value = result.simcPath || result.simc_path || '';
-    if (threadsInput) threadsInput.value = result.threads || '';
-    if (iterationsInput) iterationsInput.value = result.iterations || '';
-    if (apiKeyInput) apiKeyInput.value = result.blizzardApiKey || result.blizzard_api_key || '';
+    if (simcPathInput) simcPathInput.value = result.simc_path || '';
+    if (threadsInput) threadsInput.value = result.simc_threads || '';
+    if (iterationsInput) iterationsInput.value = result.simc_iterations || '';
+    if (clientIdInput) clientIdInput.value = result.blizzard_client_id || '';
+    if (clientSecretInput) clientSecretInput.value = result.blizzard_client_secret || '';
+    if (regionSelect) regionSelect.value = result.blizzard_region || 'eu';
   } catch (e) {
     console.error('loadSettings: failed', e);
   }
@@ -506,23 +510,31 @@ async function saveSettings() {
     var simcPath = '';
     var threads = '';
     var iterations = '';
-    var blizzardKey = '';
+    var clientId = '';
+    var clientSecret = '';
+    var region = '';
 
-    var simcPathInput = document.getElementById('setting-simc-path');
-    var threadsInput = document.getElementById('setting-threads');
-    var iterationsInput = document.getElementById('setting-iterations');
-    var apiKeyInput = document.getElementById('setting-blizzard-key');
+    var simcPathInput = document.getElementById('settSimcPath');
+    var threadsInput = document.getElementById('settSimcThreads');
+    var iterationsInput = document.getElementById('settSimcIterations');
+    var clientIdInput = document.getElementById('settBlizzClientId');
+    var clientSecretInput = document.getElementById('settBlizzClientSecret');
+    var regionSelect = document.getElementById('settBlizzRegion');
 
     if (simcPathInput) simcPath = simcPathInput.value.trim();
     if (threadsInput) threads = threadsInput.value.trim();
     if (iterationsInput) iterations = iterationsInput.value.trim();
-    if (apiKeyInput) blizzardKey = apiKeyInput.value.trim();
+    if (clientIdInput) clientId = clientIdInput.value.trim();
+    if (clientSecretInput) clientSecret = clientSecretInput.value.trim();
+    if (regionSelect) region = regionSelect.value;
 
     var body = {
-      simcPath: simcPath,
-      threads: threads ? parseInt(threads, 10) : undefined,
-      iterations: iterations ? parseInt(iterations, 10) : undefined,
-      blizzardApiKey: blizzardKey,
+      simc_path: simcPath,
+      simc_threads: threads ? parseInt(threads, 10) : undefined,
+      simc_iterations: iterations ? parseInt(iterations, 10) : undefined,
+      blizzard_client_id: clientId,
+      blizzard_client_secret: clientSecret,
+      blizzard_region: region,
     };
 
     var result = await apiFetch('/config', 'PATCH', body);
