@@ -72,6 +72,14 @@ function parseSimcBags(simcText) {
     }
   }
 
+  // Obsolete item IDs that should never be suggested
+  var OBSOLETE_ITEMS = [
+    '158075', // Heart of Azeroth (BfA)
+    '169223', // Ashjra'kamas (8.3 cloak)
+    '190455', // Unity (SL legendary belt)
+    '190456', '190457', '190458', '190459', '190460', // SL legendary slots
+  ];
+
   // Extract equipped item ilvls to calculate minimum threshold
   var equippedIlvls = {};
   profileLines.forEach(function(line) {
@@ -83,19 +91,25 @@ function parseSimcBags(simcText) {
     }
   });
 
-  // Calculate average equipped ilvl
+  // Calculate minimum ilvl: lowest equipped - 15 (tight filter)
   var ilvlValues = Object.values(equippedIlvls);
   var avgIlvl = ilvlValues.length > 0 ? ilvlValues.reduce(function(a,b){return a+b},0) / ilvlValues.length : 0;
-  var minIlvl = Math.floor(avgIlvl * 0.85); // Scarta oggetti sotto l'85% dell'ilvl medio
+  var lowestEquipped = ilvlValues.length > 0 ? Math.min.apply(null, ilvlValues) : 0;
+  var minIlvl = Math.max(lowestEquipped - 15, Math.floor(avgIlvl * 0.90));
 
-  // Filter bag items: remove items way below equipped ilvl
+  // Filter bag items
   var filteredBags = bagItems.filter(function(item) {
-    if (!item.ilvl) return true; // Keep items without ilvl info
+    // Block obsolete items
+    if (OBSOLETE_ITEMS.indexOf(item.itemId) !== -1) {
+      console.log('[topgear] Blocked obsolete item: ' + item.name + ' (id=' + item.itemId + ')');
+      return false;
+    }
+    // Filter by ilvl
+    if (!item.ilvl) return true;
     var itemIlvl = parseInt(item.ilvl);
     var equippedSlotIlvl = equippedIlvls[item.slot] || avgIlvl;
-    // Skip if item ilvl is more than 30 below the equipped slot OR below 85% of avg
-    if (itemIlvl < equippedSlotIlvl - 30 || itemIlvl < minIlvl) {
-      console.log('[topgear] Filtered out low ilvl item: ' + item.name + ' (' + item.ilvl + ' vs equipped ' + equippedSlotIlvl + ')');
+    if (itemIlvl < equippedSlotIlvl - 15 || itemIlvl < minIlvl) {
+      console.log('[topgear] Filtered low ilvl: ' + item.name + ' (' + item.ilvl + ' vs slot ' + equippedSlotIlvl + ', min ' + minIlvl + ')');
       return false;
     }
     return true;
