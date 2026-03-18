@@ -38,6 +38,18 @@ let tokenExpiresAt = 0;
 // --------------- Helpers ---------------
 
 /**
+ * Map of known realm names / partial slugs (without accents) to the correct
+ * Blizzard API slug.  Keys MUST be lowercase.
+ */
+var REALM_SLUG_MAP = {
+  "pozzo dell'eternita": "pozzo-delleternità",
+  "pozzo dell'eternità": "pozzo-delleternità",
+  "pozzo-delleternita": "pozzo-delleternità",
+  "pozzo-delleternità": "pozzo-delleternità",
+  "pozzo dell eternita": "pozzo-delleternità",
+};
+
+/**
  * Convert a display name (realm or character) into a Blizzard-API-compatible slug.
  *
  * Steps:
@@ -73,6 +85,25 @@ function slugify(text) {
 function isAlreadySlug(text) {
   // A slug has no uppercase letters and no spaces
   return text === text.toLowerCase() && !/\s/.test(text);
+}
+
+/**
+ * Resolve a realm input to the correct Blizzard API slug.
+ *
+ * 1. Check REALM_SLUG_MAP for a known override (handles accent-stripped slugs
+ *    and display names with apostrophes).
+ * 2. If the input already looks like a slug, return it as-is.
+ * 3. Otherwise, run the generic slugify helper.
+ */
+function resolveRealmSlug(realm) {
+  var key = realm.toLowerCase();
+  if (REALM_SLUG_MAP[key]) {
+    return REALM_SLUG_MAP[key];
+  }
+  if (isAlreadySlug(realm)) {
+    return realm;
+  }
+  return slugify(realm);
 }
 
 /**
@@ -248,7 +279,7 @@ function parseEquipmentItem(item) {
 async function importCharacter(realm, name, region) {
   try {
     const effectiveRegion = (region || db.getConfig('blizzard_region') || 'eu').toLowerCase();
-    const realmSlug = isAlreadySlug(realm) ? realm : slugify(realm);
+    const realmSlug = resolveRealmSlug(realm);
     const charName = slugify(name);
     const profileNs = `profile-${effectiveRegion}`;
     const basePath = `/profile/wow/character/${encodeURIComponent(realmSlug)}/${encodeURIComponent(charName)}`;
