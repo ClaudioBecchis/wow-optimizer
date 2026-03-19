@@ -20,7 +20,7 @@ function getBlizzToken() {
   return new Promise(function(ok) {
     if (blizzToken && Date.now() < blizzTokenExpiry) return ok(blizzToken);
     var r = https.request({ hostname: 'oauth.battle.net', path: '/token', method: 'POST',
-      headers: { Authorization: 'Basic ' + Buffer.from('7e62e4ac2af840e9b220f6b6da088b05:iNmhg9Dpg8qvulQDSnKDdwblSY7UYdcr').toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' }
+      headers: { Authorization: 'Basic ' + Buffer.from((process.env.BLIZZARD_CLIENT_ID || '') + ':' + (process.env.BLIZZARD_CLIENT_SECRET || '')).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' }
     }, function(s) { var d = ''; s.on('data', function(c) { d += c; }); s.on('end', function() { try { var j = JSON.parse(d); blizzToken = j.access_token; blizzTokenExpiry = Date.now() + (j.expires_in - 60) * 1000; ok(blizzToken); } catch(e) { ok(null); } }); });
     r.write('grant_type=client_credentials'); r.end();
   });
